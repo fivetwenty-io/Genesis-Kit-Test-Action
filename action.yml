@@ -1,0 +1,388 @@
+name: 'Genesis Kit Build, Test & Spec Check'
+description: 'Builds Genesis kit, runs spec tests, checks for breaking changes, and tests deployment'
+author: 'Genesis Community'
+
+inputs:
+  kit_name:
+    description: 'Name of the Genesis kit'
+    required: true
+  version_bump:
+    description: 'Type of version bump (patch, minor, major)'
+    required: false
+    default: 'patch'
+  go_version:
+    description: 'Go version to use for tests'
+    required: false
+    default: 'go1.23.5.linux-amd64.tar.gz'
+  ginkgo_params:
+    description: 'Ginkgo test parameters'
+    required: false
+    default: '-p'
+  deploy_env:
+    description: 'Deployment environment for testing'
+    required: false
+    default: 'ci-vsphere-baseline'
+  iaas_provider:
+    description: 'Infrastructure type (vsphere, aws, gcp, etc)'
+    required: false
+    default: 'vsphere'
+  release_branch:
+    description: 'Branch to create PR against for releases'
+    required: false
+    default: 'main'
+  # Infrastructure credentials
+  aws_access_key_id:
+    description: 'AWS Access Key ID'
+    required: false
+  aws_secret_access_key:
+    description: 'AWS Secret Access Key'
+    required: false
+  gcp_service_account_key:
+    description: 'GCP Service Account Key'
+    required: false
+  vsphere_username:
+    description: 'vSphere Username'
+    required: false
+  vsphere_password:
+    description: 'vSphere Password'
+    required: false
+  # Genesis/BOSH credentials
+  secrets_base:
+    description: 'Genesis secrets base'
+    required: false
+  secrets_token:
+    description: 'Genesis secrets token'
+    required: false
+  secrets_key:
+    description: 'Genesis secrets key'
+    required: false
+  bosh_client:
+    description: 'BOSH client'
+    required: false
+  bosh_client_secret:
+    description: 'BOSH client secret'
+    required: false
+  bosh_environment:
+    description: 'BOSH environment'
+    required: false
+  bosh_ca_cert:
+    description: 'BOSH CA certificate'
+    required: false
+  secrets_seed_data:
+    description: 'Seed data for secrets'
+    required: false
+  github_token:
+    description: 'GitHub token for operations'
+    required: true
+
+outputs:
+  version:
+    description: 'The new version number'
+    value: ${{ steps.version.outputs.new_version }}
+  previous_version:
+    description: 'The previous version number'
+    value: ${{ steps.version.outputs.previous_version }}
+  has_breaking_changes:
+    description: 'Whether breaking changes were detected'
+    value: ${{ steps.check-breaking.outputs.has_breaking_changes }}
+  is_release_commit:
+    description: 'Whether the commit message indicates a release'
+    value: ${{ steps.check-release-commit.outputs.is_release }}
+  release_version:
+    description: 'Version to release from commit message'
+    value: ${{ steps.check-release-commit.outputs.version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup tools
+      shell: bash
+      run: |
+        # Install common tools
+        sudo apt-get update
+        sudo apt-get install -y build-essential unzip jq
+        
+        # Install Genesis dependencies
+        ${{ github.action_path }}/scripts/ensure-tools.sh
+
+    # VERSION MANAGEMENT
+    - name: Get current version
+      id: current
+      shell: bash
+      run: |
+        if [[ -f version ]]; then
+          version=$(cat version | grep -oP '(?<=Version: ).*' || echo "0.0.0")
+          echo "current_version=$version" >> $GITHUB_OUTPUT
+        else
+          echo "current_version=0.0.0" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Bump version
+      id: version
+      shell: bash
+      run: |
+        current="${{ steps.current.outputs.current_version }}"
+        
+        # Extract version components
+        major=$(echo "$current" | cut -d. -f1)
+        minor=$(echo "$current" | cut -d. -f2)
+        patch=$(echo "$current" | cut -d. -f3)
+        
+        # Bump version according to type
+        case "${{ inputs.version_bump }}" in
+          major)
+            major=$((major + 1))
+            minor=0
+            patch=0
+            ;;
+          minor)
+            minor=$((minor + 1))
+            patch=0
+            ;;
+          patch|*)
+            patch=$((patch + 1))
+            ;;
+        esac
+        
+        new_version="${major}.${minor}.${patch}"
+        echo "new_version=${new_version}" >> $GITHUB_OUTPUT
+        echo "previous_version=$current" >> $GITHUB_OUTPUT
+        
+        # Update version file
+        echo "## Version: ${new_version}" > version
+
+    # Check if this is a release commit
+    - name: Check for release commit
+      id: check-release-commit
+      shell: bash
+      run: |
+        # Get the last commit message
+        commit_msg=$(git log -1 --pretty=%B)
+        
+        # Check if it matches a release pattern
+        if [[ $commit_msg =~ [Rr][Ee][Ll][Ee][Aa][Ss][Ee][^0-9]*([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+          echo "is_release=true" >> $GITHUB_OUTPUT
+          echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+          echo "Detected release commit for version ${BASH_REMATCH[1]}"
+        else
+          echo "is_release=false" >> $GITHUB_OUTPUT
+          echo "version=" >> $GITHUB_OUTPUT
+          echo "Not a release commit"
+        fi
+
+    # BUILD KIT
+    - name: Build Kit
+      shell: bash
+      env:
+        GENESIS_SECRETS_BASE: ${{ inputs.secrets_base }}
+        GENESIS_SECRETS_TOKEN: ${{ inputs.secrets_token }}
+        GENESIS_SECRETS_KEY: ${{ inputs.secrets_key }}
+        KIT_NAME: ${{ inputs.kit_name }}
+        KIT_VERSION: ${{ steps.version.outputs.new_version }}
+        BUILD_ROOT: "build"
+      run: |
+        sudo chmod -R a+rwx ./*
+        
+        genesis compile-kit --force -v "$KIT_VERSION" -n "$KIT_NAME"
+        sudo mkdir -p $BUILD_ROOT/
+        sudo chmod -R a+rwx $BUILD_ROOT/
+        cp ./$KIT_NAME-$KIT_VERSION.tar.gz $BUILD_ROOT/
+        ls -lah $BUILD_ROOT/
+        echo "Build completed successfully"
+
+    # RUN SPEC TESTS
+    - name: Setup Go for tests
+      shell: bash
+      run: |
+        sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf ${{ inputs.go_version }}
+        go install github.com/onsi/ginkgo/v2/ginkgo@latest
+        export PATH=$PATH:~/go/bin
+
+    - name: Run Spec Tests
+      shell: bash
+      env:
+        GENESIS_SECRETS_BASE: ${{ inputs.secrets_base }}
+        GENESIS_SECRETS_TOKEN: ${{ inputs.secrets_token }}
+        GENESIS_SECRETS_KEY: ${{ inputs.secrets_key }}
+        KIT_VERSION: ${{ steps.version.outputs.new_version }}
+      run: |
+        sudo chmod -R a+rwx ./*
+        export PATH=$PATH:~/go/bin
+        
+        cd spec
+        ginkgo ${{ inputs.ginkgo_params }} .
+
+    # SPEC CHANGE CHECK
+    - name: Check Specs for breaking changes
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        CURRENT_VERSION: ${{ steps.version.outputs.new_version }}
+        PREVIOUS_VERSION: ${{ steps.version.outputs.previous_version }}
+      run: |
+        mkdir -p spec-check
+        
+        # Get the most recent tag
+        git fetch --tags
+        PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        
+        if [[ -n "$PREV_TAG" ]]; then
+          echo "Found previous tag: $PREV_TAG"
+          git checkout $PREV_TAG
+          cp -r spec/results ./spec-check/old-specs
+          git checkout -
+        fi
+        
+        results_file="${GITHUB_WORKSPACE}/spec-check/diff-$(date -u +%Y%m%d%H%M%S)"
+        if [[ -n "$PREV_TAG" ]]; then
+          echo "Comparing specs with previous release $PREV_TAG" > "$results_file"
+          ${{ github.action_path }}/scripts/compare-release-specs.sh "$PREV_TAG" >> "$results_file"
+        else
+          echo "Initial release - no spec changes to compare" > "$results_file"
+        fi
+
+    - name: Check for breaking changes
+      id: check-breaking
+      shell: bash
+      run: |
+        if grep -q "BREAKING CHANGE" spec-check/diff-*; then
+          echo "has_breaking_changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_breaking_changes=false" >> $GITHUB_OUTPUT
+        fi
+
+    # INFRASTRUCTURE SETUP FOR DEPLOYMENT
+    - name: Setup Infrastructure
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        GCP_SERVICE_ACCOUNT_KEY: ${{ inputs.gcp_service_account_key }}
+        VSPHERE_USERNAME: ${{ inputs.vsphere_username }}
+        VSPHERE_PASSWORD: ${{ inputs.vsphere_password }}
+      run: |
+        # Install infrastructure-specific tools
+        case "${{ inputs.iaas_provider }}" in
+          vsphere)
+            # VSphere specific setup
+            echo "Setting up VSphere tools..."
+            # Configure VSphere credentials
+            mkdir -p ~/.vsphere
+            echo "$VSPHERE_USERNAME" > ~/.vsphere/username
+            echo "$VSPHERE_PASSWORD" > ~/.vsphere/password
+            ;;
+          aws)
+            # AWS specific setup
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+            # Configure AWS credentials
+            mkdir -p ~/.aws
+            cat > ~/.aws/credentials << EOF
+        [default]
+        aws_access_key_id = $AWS_ACCESS_KEY_ID
+        aws_secret_access_key = $AWS_SECRET_ACCESS_KEY
+        EOF
+            ;;
+          gcp)
+            # GCP specific setup
+            echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+            curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+            sudo apt-get update && sudo apt-get install google-cloud-cli
+            # Configure GCP credentials
+            echo "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/gcp-key.json
+            gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
+            rm /tmp/gcp-key.json
+            ;;
+        esac
+    
+    # VAULT SETUP
+    - name: Setup Vault
+      shell: bash
+      run: |
+        sudo chmod -R a+rwx ./*
+        ${{ github.action_path }}/scripts/init-vault.sh
+
+    # DEPLOYMENT TEST
+    - name: Deploy and Test
+      shell: bash
+      env:
+        DEPLOY_ENV: ${{ inputs.deploy_env }}
+        CI_ROOT: "${{ github.workspace }}/git-ci"
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+        GENESIS_SECRETS_BASE: ${{ inputs.secrets_base }}
+        GENESIS_SECRETS_TOKEN: ${{ inputs.secrets_token }}
+        GENESIS_SECRETS_KEY: ${{ inputs.secrets_key }}
+        GENESIS_STACK_TRACE: "yes"
+        BOSH_CLIENT: ${{ inputs.bosh_client }}
+        BOSH_CLIENT_SECRET: ${{ inputs.bosh_client_secret }}
+        BOSH_ENVIRONMENT: ${{ inputs.bosh_environment }}
+        BOSH_CA_CERT: ${{ inputs.bosh_ca_cert }}
+        SECRETS_SEED_DATA: ${{ inputs.secrets_seed_data }}
+        KIT_VERSION: ${{ steps.version.outputs.new_version }}
+        KIT_SHORTNAME: ${{ inputs.kit_name }}
+        BUILD_ROOT: "build"
+      run: |
+        sudo mkdir -p $CI_ROOT/ci/
+        sudo chmod a+rwx $CI_ROOT/ci/
+        cp -r ${{ github.action_path }}/scripts/* $CI_ROOT/ci/scripts/
+        cp -r ./ci/envs/ $CI_ROOT/ci/envs/
+        ${{ github.action_path }}/scripts/deploy.sh
+
+    # GENERATE RELEASE NOTES
+    - name: Generate Release Notes
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        KIT_SHORTNAME: ${{ inputs.kit_name }}
+        RELEASE_NOTES_FILE: "release-notes.md"
+        GITHUB_ACCESS_TOKEN: ${{ inputs.github_token }}
+      run: |
+        mkdir -p release-notes
+        ${{ github.action_path }}/scripts/release-notes.sh \
+          "${{ steps.version.outputs.new_version }}" \
+          "$(pwd)" \
+          "$PREV_TAG" \
+          "release-notes/$RELEASE_NOTES_FILE"
+
+    # CREATE PR FOR RELEASE
+    - name: Create Pull Request for Release
+      if: steps.check-release-commit.outputs.is_release == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        KIT_NAME: ${{ inputs.kit_name }}
+        VERSION: ${{ steps.check-release-commit.outputs.version }}
+        RELEASE_BRANCH: ${{ inputs.release_branch }}
+      run: |
+        git config --global user.name "Genesis CI Bot"
+        git config --global user.email "genesis-ci@example.com"
+        
+        # Create release branch
+        release_branch="release/v${VERSION}"
+        git checkout -b $release_branch
+        
+        # Commit changes if any
+        git add -A
+        git commit -m "Prepare release v${VERSION}" || echo "No changes to commit"
+        
+        # Push branch
+        git push origin $release_branch
+        
+        # Create PR using GitHub API
+        pr_body="Release preparation for version ${VERSION}
+
+        Generated from release commit.
+        $(cat release-notes/release-notes.md 2>/dev/null || echo "No release notes available.")"
+        
+        # Create PR
+        curl -X POST \
+          -H "Authorization: token $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls" \
+          -d '{
+            "title": "Release v'"${VERSION}"'",
+            "body": "'"${pr_body}"'",
+            "head": "'"${release_branch}"'",
+            "base": "'"${RELEASE_BRANCH}"'"
+          }'
