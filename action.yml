@@ -103,7 +103,7 @@ runs:
         sudo apt-get install -y build-essential unzip jq
         
         # Install Genesis dependencies
-        ${{ github.action_path }}/scripts/ensure-tools.sh
+        ${{ github.action_path }}/ci/scripts/ensure-tools.sh
 
     # VERSION MANAGEMENT
     - name: Get current version
@@ -236,7 +236,7 @@ runs:
         results_file="${GITHUB_WORKSPACE}/spec-check/diff-$(date -u +%Y%m%d%H%M%S)"
         if [[ -n "$PREV_TAG" ]]; then
           echo "Comparing specs with previous release $PREV_TAG" > "$results_file"
-          ${{ github.action_path }}/scripts/compare-release-specs.sh "$PREV_TAG" >> "$results_file"
+          ${{ github.action_path }}/ci/scripts/compare-release-specs.sh "$PREV_TAG" >> "$results_file"
         else
           echo "Initial release - no spec changes to compare" > "$results_file"
         fi
@@ -301,7 +301,7 @@ runs:
       shell: bash
       run: |
         sudo chmod -R a+rwx ./*
-        ${{ github.action_path }}/scripts/init-vault.sh
+        ${{ github.action_path }}/ci/scripts/init-vault.sh
 
     # DEPLOYMENT TEST
     - name: Deploy and Test
@@ -325,9 +325,9 @@ runs:
       run: |
         sudo mkdir -p $CI_ROOT/ci/
         sudo chmod a+rwx $CI_ROOT/ci/
-        cp -r ${{ github.action_path }}/scripts/* $CI_ROOT/ci/scripts/
+        cp -r ${{ github.action_path }}/ci/scripts/* $CI_ROOT/ci/ci/scripts/
         cp -r ./ci/envs/ $CI_ROOT/ci/envs/
-        ${{ github.action_path }}/scripts/deploy.sh
+        ${{ github.action_path }}/ci/scripts/deploy.sh
 
     # GENERATE RELEASE NOTES
     - name: Generate Release Notes
@@ -339,7 +339,7 @@ runs:
         GITHUB_ACCESS_TOKEN: ${{ inputs.github_token }}
       run: |
         mkdir -p release-notes
-        ${{ github.action_path }}/scripts/release-notes.sh \
+        ${{ github.action_path }}/ci/scripts/release-notes.sh \
           "${{ steps.version.outputs.new_version }}" \
           "$(pwd)" \
           "$PREV_TAG" \
@@ -386,3 +386,65 @@ runs:
             "head": "'"${release_branch}"'",
             "base": "'"${RELEASE_BRANCH}"'"
           }'
+
+    - name: Add explanation comment to PR
+      if: steps.check-release-commit.outputs.is_release == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        KIT_NAME: ${{ inputs.kit_name }}
+        VERSION: ${{ steps.check-release-commit.outputs.version }}
+        PR_COMMENT_FILE: "${{ github.action_path }}/docs/pr-comment-template.md"
+      run: |
+        # Get the PR number from the previous step
+        PR_RESPONSE=$(curl -s -X GET \
+          -H "Authorization: token $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls?head=release/v${VERSION}&base=${{ inputs.release_branch }}&state=open")
+
+        PR_NUMBER=$(echo "$PR_RESPONSE" | jq -r '.[0].number')
+
+        if [[ "$PR_NUMBER" == "null" || -z "$PR_NUMBER" ]]; then
+          echo "Could not find the PR number. Cannot add comment."
+          exit 1
+        fi
+
+        echo "Found PR #$PR_NUMBER"
+
+        # Read the comment template file or use default if not found
+        if [[ -f "$PR_COMMENT_FILE" ]]; then
+          PR_COMMENT=$(cat "$PR_COMMENT_FILE")
+          echo "Using comment template from file"
+        else
+          # Default comment if template file doesn't exist
+          PR_COMMENT="# Release Process for ${KIT_NAME} v${VERSION}
+
+          This PR was automatically created as part of the release process for version ${VERSION}.
+          
+          ## What happens next:
+          1. Review the changes and release notes
+          2. Run any additional manual tests if needed
+          3. Approve and merge this PR to complete the release
+          4. The GitHub release will be automatically created after merging
+          
+          ## Breaking Changes
+          $(grep -A 5 "BREAKING CHANGE" spec-check/diff-* 2>/dev/null || echo "No breaking changes detected")
+          
+          For more information, see the [release documentation](https://your-docs-link)."
+          echo "Using default comment template"
+        fi
+
+        # Replace placeholders in the comment
+        PR_COMMENT=${PR_COMMENT//\{\{VERSION\}\}/$VERSION}
+        PR_COMMENT=${PR_COMMENT//\{\{KIT_NAME\}\}/$KIT_NAME}
+
+        # Create a comment on the PR
+        curl -X POST \
+          -H "Authorization: token $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+          -d "{
+            \"body\": $(echo "$PR_COMMENT" | jq -Rs .)
+          }"
+
+        echo "Comment added to PR #$PR_NUMBER"
