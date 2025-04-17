@@ -10,6 +10,10 @@ inputs:
     description: 'Type of version bump (patch, minor, major)'
     required: false
     default: 'patch'
+  debug_mode:
+    description: 'Skip testing and just create PR for release'
+    required: false
+    default: 'false'
   go_version:
     description: 'Go version to use for tests'
     required: false
@@ -98,7 +102,6 @@ runs:
     - name: Setup tools
       shell: bash
       run: |
-
         # Install common tools
         sudo apt-get update
         sudo apt-get install -y build-essential unzip jq
@@ -177,7 +180,7 @@ runs:
           echo "Not a release commit"
         fi
 
-    # BUILD KIT
+    # BUILD KIT (Required even in debug mode)
     - name: Build Kit
       shell: bash
       env:
@@ -197,8 +200,31 @@ runs:
         ls -lah $BUILD_ROOT/
         echo "Build completed successfully"
 
-    # RUN SPEC TESTS
+    # Conditionally run testing steps
+    - name: Create directories for spec check and release notes
+      if: inputs.debug_mode == 'true'
+      shell: bash
+      run: |
+        mkdir -p spec-check
+        mkdir -p release-notes
+        echo "Debug mode enabled - skipping tests and proceeding directly to PR creation"
+        # Create placeholder files for spec checks
+        echo "SKIPPED IN DEBUG MODE" > spec-check/diff-$(date -u +%Y%m%d%H%M%S)
+        # Create placeholder for release notes
+        echo "# Release Notes for ${{ inputs.kit_name }} v${{ steps.version.outputs.new_version }}" > release-notes/release-notes.md
+        echo "Generated in debug mode - no automated tests were run." >> release-notes/release-notes.md
+
+    # Setting has_breaking_changes in debug mode
+    - name: Set breaking changes flag in debug mode
+      if: inputs.debug_mode == 'true'
+      id: check-breaking-debug
+      shell: bash
+      run: |
+        echo "has_breaking_changes=false" >> $GITHUB_OUTPUT
+
+    # RUN SPEC TESTS - Skip in debug mode
     - name: Setup Go for tests
+      if: inputs.debug_mode != 'true'
       shell: bash
       run: |
         sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf ${{ inputs.go_version }}
@@ -206,6 +232,7 @@ runs:
         export PATH=$PATH:~/go/bin
 
     - name: Run Spec Tests
+      if: inputs.debug_mode != 'true'
       shell: bash
       env:
         GENESIS_SECRETS_BASE: ${{ inputs.secrets_base }}
@@ -219,8 +246,9 @@ runs:
         cd spec
         ginkgo ${{ inputs.ginkgo_params }} .
 
-    # SPEC CHANGE CHECK
+    # SPEC CHANGE CHECK - Skip in debug mode
     - name: Check Specs for breaking changes
+      if: inputs.debug_mode != 'true'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
@@ -249,6 +277,7 @@ runs:
         fi
 
     - name: Check for breaking changes
+      if: inputs.debug_mode != 'true'
       id: check-breaking
       shell: bash
       run: |
@@ -258,8 +287,9 @@ runs:
           echo "has_breaking_changes=false" >> $GITHUB_OUTPUT
         fi
 
-    # INFRASTRUCTURE SETUP FOR DEPLOYMENT
+    # INFRASTRUCTURE SETUP FOR DEPLOYMENT - Skip in debug mode
     - name: Setup Infrastructure
+      if: inputs.debug_mode != 'true'
       shell: bash
       env:
         AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
@@ -303,15 +333,17 @@ runs:
             ;;
         esac
     
-    # VAULT SETUP
+    # VAULT SETUP - Skip in debug mode
     - name: Setup Vault
+      if: inputs.debug_mode != 'true'
       shell: bash
       run: |
         sudo chmod -R a+rwx ./*
         ${{ github.action_path }}/ci/scripts/init-vault.sh
 
-    # DEPLOYMENT TEST
+    # DEPLOYMENT TEST - Skip in debug mode
     - name: Deploy and Test
+      if: inputs.debug_mode != 'true'
       shell: bash
       env:
         DEPLOY_ENV: ${{ inputs.deploy_env }}
@@ -336,8 +368,9 @@ runs:
         cp -r ./ci/envs/ $CI_ROOT/ci/envs/
         ${{ github.action_path }}/ci/scripts/deploy.sh
 
-    # GENERATE RELEASE NOTES
+    # GENERATE RELEASE NOTES - Simplified in debug mode
     - name: Generate Release Notes
+      if: inputs.debug_mode != 'true'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
@@ -352,55 +385,89 @@ runs:
           "$PREV_TAG" \
           "release-notes/$RELEASE_NOTES_FILE"
 
-    # CREATE PR FOR RELEASE
+    # CREATE PR FOR RELEASE OR MANUAL TRIGGER
     - name: Create Pull Request for Release
-      if: steps.check-release-commit.outputs.is_release == 'true'
+      if: steps.check-release-commit.outputs.is_release == 'true' || inputs.debug_mode == 'true'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         KIT_NAME: ${{ inputs.kit_name }}
-        VERSION: ${{ steps.check-release-commit.outputs.version }}
+        VERSION: ${{ steps.check-release-commit.outputs.is_release == 'true' && steps.check-release-commit.outputs.version || steps.version.outputs.new_version }}
         RELEASE_BRANCH: ${{ inputs.release_branch }}
       run: |
         git config --global user.name "Genesis CI Bot"
         git config --global user.email "genesis-ci@example.com"
         
-        # Create release branch
+        # Create release branch if it doesn't exist
         release_branch="release/v${VERSION}"
-        git checkout -b $release_branch
+        
+        # Check if release branch exists remotely
+        if git ls-remote --heads origin $release_branch | grep -q $release_branch; then
+          echo "Release branch $release_branch already exists, checking it out"
+          git fetch origin
+          git checkout $release_branch || git checkout -b $release_branch origin/$release_branch
+        else
+          echo "Creating new release branch $release_branch"
+          git checkout -b $release_branch
+        fi
         
         # Commit changes if any
         git add -A
-        git commit -m "Prepare release v${VERSION}" || echo "No changes to commit"
+        if [[ "${{ inputs.debug_mode }}" == "true" ]]; then
+          git commit -m "Prepare release v${VERSION} (debug mode)" || echo "No changes to commit"
+        else
+          git commit -m "Prepare release v${VERSION}" || echo "No changes to commit"
+        fi
         
         # Push branch
         git push origin $release_branch
         
-        # Create PR using GitHub API
-        pr_body="Release preparation for version ${VERSION}
-
-        Generated from release commit.
-        $(cat release-notes/release-notes.md 2>/dev/null || echo "No release notes available.")"
-        
-        # Create PR
-        curl -X POST \
+        # Check if PR already exists
+        PR_EXISTS=$(curl -s -X GET \
           -H "Authorization: token $GITHUB_TOKEN" \
           -H "Accept: application/vnd.github.v3+json" \
-          "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls" \
-          -d '{
-            "title": "Release v'"${VERSION}"'",
-            "body": "'"${pr_body}"'",
-            "head": "'"${release_branch}"'",
-            "base": "'"${RELEASE_BRANCH}"'"
-          }'
+          "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls?head=release/v${VERSION}&base=${RELEASE_BRANCH}&state=open" | jq length)
+        
+        if [[ "$PR_EXISTS" -gt 0 ]]; then
+          echo "PR already exists for this release branch, skipping PR creation"
+        else
+          # Create PR if it doesn't exist
+          pr_title="Release v${VERSION}"
+          if [[ "${{ inputs.debug_mode }}" == "true" ]]; then
+            pr_title="${pr_title} (MANUAL RELEASE - NO TESTS)"
+          fi
+          
+          pr_body="Release preparation for version ${VERSION}
+
+          $(if [[ "${{ inputs.debug_mode }}" == "true" ]]; then
+            echo "⚠️ MANUAL RELEASE - TESTING WAS SKIPPED ⚠️"
+            echo "This PR was created in debug mode. No automated tests were run."
+          else
+            echo "Generated from release commit."
+          fi)
+
+          $(cat release-notes/release-notes.md 2>/dev/null || echo "No release notes available.")"
+          
+          # Create PR
+          curl -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls" \
+            -d '{
+              "title": "'"${pr_title}"'",
+              "body": "'"${pr_body}"'",
+              "head": "'"${release_branch}"'",
+              "base": "'"${RELEASE_BRANCH}"'"
+            }'
+        fi
 
     - name: Add explanation comment to PR
-      if: steps.check-release-commit.outputs.is_release == 'true'
+      if: (steps.check-release-commit.outputs.is_release == 'true' || inputs.debug_mode == 'true')
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         KIT_NAME: ${{ inputs.kit_name }}
-        VERSION: ${{ steps.check-release-commit.outputs.version }}
+        VERSION: ${{ steps.check-release-commit.outputs.is_release == 'true' && steps.check-release-commit.outputs.version || steps.version.outputs.new_version }}
         PR_COMMENT_FILE: "${{ github.action_path }}/docs/pr-comment-template.md"
       run: |
         # Get the PR number from the previous step
@@ -424,20 +491,39 @@ runs:
           echo "Using comment template from file"
         else
           # Default comment if template file doesn't exist
-          PR_COMMENT="# Release Process for ${KIT_NAME} v${VERSION}
+          if [[ "${{ inputs.debug_mode }}" == "true" ]]; then
+            PR_COMMENT="# Manual Release Process for ${KIT_NAME} v${VERSION}
 
-          This PR was automatically created as part of the release process for version ${VERSION}.
-          
-          ## What happens next:
-          1. Review the changes and release notes
-          2. Run any additional manual tests if needed
-          3. Approve and merge this PR to complete the release
-          4. The GitHub release will be automatically created after merging
-          
-          ## Breaking Changes
-          $(grep -A 5 "BREAKING CHANGE" spec-check/diff-* 2>/dev/null || echo "No breaking changes detected")
-          
-          For more information, see the [release documentation](https://your-docs-link)."
+            This PR was manually created in debug mode for version ${VERSION}.
+            
+            ## ⚠️ IMPORTANT: No automated tests were run! ⚠️
+            
+            ## What happens next:
+            1. Review the changes
+            2. Run any necessary manual tests before merging
+            3. Approve and merge this PR to complete the release
+            4. The GitHub release will be automatically created after merging
+            
+            ## Breaking Changes
+            Testing was skipped, so no automated breaking change detection was performed.
+            Please review changes manually before merging."
+          else
+            # Default comment if template file doesn't exist and not in debug mode
+            PR_COMMENT="# Release Process for ${KIT_NAME} v${VERSION}
+
+            This PR was automatically created as part of the release process for version ${VERSION}.
+            
+            ## What happens next:
+            1. Review the changes and release notes
+            2. Run any additional manual tests if needed
+            3. Approve and merge this PR to complete the release
+            4. The GitHub release will be automatically created after merging
+            
+            ## Breaking Changes
+            $(grep -A 5 "BREAKING CHANGE" spec-check/diff-* 2>/dev/null || echo "No breaking changes detected")
+            
+            For more information, see the [release documentation](https://your-docs-link)."
+          fi
           echo "Using default comment template"
         fi
 
