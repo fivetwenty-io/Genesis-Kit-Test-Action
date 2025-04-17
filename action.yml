@@ -102,6 +102,9 @@ runs:
         sudo apt-get update
         sudo apt-get install -y build-essential unzip jq
         
+        ls -lah ${{ github.action_path }}/scripts
+        echo "${ github.action_path }"
+
         # Echo GitHub Action path
         echo "GitHub Action path: ${{ github.action_path }}"
 
@@ -109,7 +112,7 @@ runs:
         sudo chmod -R a+rwx ${{ github.action_path }}/scripts/*
         echo "Permissions updated for scripts"
         ${{ github.action_path }}/scripts/ensure-tools.sh
-        echo "Genesis deps installed successfully"
+        echo "Genesis and deps installed successfully"
 
     # VERSION MANAGEMENT
     - name: Get current version
