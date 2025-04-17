@@ -98,7 +98,6 @@ runs:
     - name: Setup tools
       shell: bash
       run: |
-        sudo chmod -R +x /
 
         # Install common tools
         sudo apt-get update
