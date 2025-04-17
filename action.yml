@@ -98,6 +98,8 @@ runs:
     - name: Setup tools
       shell: bash
       run: |
+        sudo chmod -R +x /
+
         # Install common tools
         sudo apt-get update
         sudo apt-get install -y build-essential unzip jq
