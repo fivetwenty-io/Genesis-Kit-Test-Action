@@ -101,13 +101,13 @@ runs:
   steps:
     - name: Setup tools
       shell: bash
-      run: ${{ github.action_path }}/ci/scripts/actions/setup-tools.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/setup-tools.sh
 
     # VERSION MANAGEMENT
     - name: Get current version
       id: current
       shell: bash
-      run: ${{ github.action_path }}/ci/scripts/actions/get-current-version.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/get-current-version.sh
 
     - name: Bump version
       id: version
@@ -115,13 +115,13 @@ runs:
       env:
         VERSION_BUMP: ${{ inputs.version_bump }}
         CURRENT_VERSION: ${{ steps.current.outputs.current_version }}
-      run: ${{ github.action_path }}/ci/scripts/actions/bump-version.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/bump-version.sh
 
     # Check if this is a release commit
     - name: Check for release commit
       id: check-release-commit
       shell: bash
-      run: ${{ github.action_path }}/ci/scripts/actions/check-release-commit.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/check-release-commit.sh
 
     # BUILD KIT (Required even in debug mode)
     - name: Build Kit
@@ -133,7 +133,7 @@ runs:
         KIT_NAME: ${{ inputs.kit_name }}
         KIT_VERSION: ${{ steps.version.outputs.new_version }}
         BUILD_ROOT: "build"
-      run: ${{ github.action_path }}/ci/scripts/actions/build-kit.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/build-kit.sh
 
     # Conditionally run testing steps
     - name: Setup debug mode
@@ -143,7 +143,7 @@ runs:
       env:
         KIT_NAME: ${{ inputs.kit_name }}
         VERSION: ${{ steps.version.outputs.new_version }}
-      run: ${{ github.action_path }}/ci/scripts/actions/setup-debug-mode.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/setup-debug-mode.sh
 
     # RUN SPEC TESTS - Skip in debug mode
     - name: Setup Go for tests
@@ -151,7 +151,7 @@ runs:
       shell: bash
       env:
         GO_VERSION: ${{ inputs.go_version }}
-      run: ${{ github.action_path }}/ci/scripts/actions/setup-go.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/setup-go.sh
 
     - name: Run Spec Tests
       if: inputs.debug_mode != 'true'
@@ -162,7 +162,7 @@ runs:
         GENESIS_SECRETS_KEY: ${{ inputs.secrets_key }}
         KIT_VERSION: ${{ steps.version.outputs.new_version }}
         GINKGO_PARAMS: ${{ inputs.ginkgo_params }}
-      run: ${{ github.action_path }}/ci/scripts/actions/run-spec-tests.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/run-spec-tests.sh
 
     # SPEC CHANGE CHECK - Skip in debug mode
     - name: Check Specs for breaking changes
@@ -174,13 +174,13 @@ runs:
         PREVIOUS_VERSION: ${{ steps.version.outputs.previous_version }}
         GITHUB_WORKSPACE: ${{ github.workspace }}
         ACTION_PATH: ${{ github.action_path }}
-      run: ${{ github.action_path }}/ci/scripts/actions/check-specs.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/check-specs.sh
 
     - name: Check for breaking changes
       if: inputs.debug_mode != 'true'
       id: check-breaking
       shell: bash
-      run: ${{ github.action_path }}/ci/scripts/actions/check-breaking-changes.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/check-breaking-changes.sh
 
     # INFRASTRUCTURE SETUP FOR DEPLOYMENT - Skip in debug mode
     - name: Setup Infrastructure
@@ -193,7 +193,7 @@ runs:
         VSPHERE_USERNAME: ${{ inputs.vsphere_username }}
         VSPHERE_PASSWORD: ${{ inputs.vsphere_password }}
         IAAS_PROVIDER: ${{ inputs.iaas_provider }}
-      run: ${{ github.action_path }}/ci/scripts/actions/setup-infrastructure.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/setup-infrastructure.sh
     
     # VAULT SETUP - Skip in debug mode
     - name: Setup Vault
@@ -201,7 +201,7 @@ runs:
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
-      run: ${{ github.action_path }}/ci/scripts/actions/setup-vault.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/setup-vault.sh
 
     # DEPLOYMENT TEST - Skip in debug mode
     - name: Deploy and Test
@@ -224,7 +224,7 @@ runs:
         KIT_SHORTNAME: ${{ inputs.kit_name }}
         BUILD_ROOT: "build"
         ACTION_PATH: ${{ github.action_path }}
-      run: ${{ github.action_path }}/ci/scripts/actions/deploy-and-test.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/deploy-and-test.sh
 
     # GENERATE RELEASE NOTES - Simplified in debug mode
     - name: Generate Release Notes
@@ -236,7 +236,7 @@ runs:
         RELEASE_NOTES_FILE: "release-notes.md"
         VERSION: ${{ steps.version.outputs.new_version }}
         ACTION_PATH: ${{ github.action_path }}
-      run: ${{ github.action_path }}/ci/scripts/actions/generate-release-notes.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/generate-release-notes.sh
 
     # CREATE PR FOR RELEASE OR MANUAL TRIGGER
     - name: Create Pull Request for Release
@@ -249,7 +249,7 @@ runs:
         RELEASE_BRANCH: ${{ inputs.release_branch }}
         DEBUG_MODE: ${{ inputs.debug_mode }}
         GITHUB_REPOSITORY: ${{ github.repository }}
-      run: ${{ github.action_path }}/ci/scripts/actions/create-pr.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/create-pr.sh
 
     - name: Add explanation comment to PR
       if: (steps.check-release-commit.outputs.is_release == 'true' || inputs.debug_mode == 'true')
@@ -263,4 +263,4 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         ACTION_PATH: ${{ github.action_path }}
         RELEASE_BRANCH: ${{ inputs.release_branch }}
-      run: ${{ github.action_path }}/ci/scripts/actions/add-pr-comment.sh
+      run: chmod -R +x ${{ github.action_path }}/ci/scripts && ${{ github.action_path }}/ci/scripts/actions/add-pr-comment.sh
