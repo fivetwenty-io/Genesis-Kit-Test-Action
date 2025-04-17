@@ -101,115 +101,27 @@ runs:
   steps:
     - name: Setup tools
       shell: bash
-      run: |
-        echo "⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡"
-        echo "🔍 DEBUG: Starting setup process for Genesis Kit Build & Test"
-        echo "⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡"
-        
-        # Install common tools
-        echo "🔍 DEBUG: Installing common tools"
-        sudo apt-get update
-        sudo apt-get install -y build-essential unzip jq
-        
-        # Echo GitHub Action path
-        echo "🔍 DEBUG: GitHub Action path: ${{ github.action_path }}"
-
-        # Install Genesis dependencies
-        echo "🔍 DEBUG: Updating permissions for scripts"
-        sudo chmod -R a+rwx ${{ github.action_path }}/ci/scripts/*
-        echo "✅ Permissions updated for scripts"
-        
-        echo "🔍 DEBUG: Installing Genesis and dependencies"
-        ${{ github.action_path }}/ci/scripts/ensure-tools.sh
-        echo "✅ Genesis and deps installed successfully"
-        echo "⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡"
+      run: ${{ github.action_path }}/ci/scripts/actions/setup-tools.sh
 
     # VERSION MANAGEMENT
     - name: Get current version
       id: current
       shell: bash
-      run: |
-        echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"
-        echo "🔍 DEBUG: Checking current version from version file"
-        if [[ -f version ]]; then
-          version=$(cat version | grep -oP '(?<=Version: ).*' || echo "0.0.0")
-          echo "🔍 DEBUG: Found version: $version"
-          echo "current_version=$version" >> $GITHUB_OUTPUT
-        else
-          echo "🔍 DEBUG: No version file found, defaulting to 0.0.0"
-          echo "current_version=0.0.0" >> $GITHUB_OUTPUT
-        fi
-        echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"
+      run: ${{ github.action_path }}/ci/scripts/actions/get-current-version.sh
 
     - name: Bump version
       id: version
       shell: bash
-      run: |
-        echo "🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢"
-        echo "🔍 DEBUG: Calculating new version according to bump type: ${{ inputs.version_bump }}"
-        current="${{ steps.current.outputs.current_version }}"
-        echo "🔍 DEBUG: Current version: $current"
-        
-        # Extract version components
-        major=$(echo "$current" | cut -d. -f1)
-        minor=$(echo "$current" | cut -d. -f2)
-        patch=$(echo "$current" | cut -d. -f3)
-        echo "🔍 DEBUG: Extracted components: major=$major, minor=$minor, patch=$patch"
-        
-        # Bump version according to type
-        case "${{ inputs.version_bump }}" in
-          major)
-            major=$((major + 1))
-            minor=0
-            patch=0
-            echo "🔍 DEBUG: Performing MAJOR version bump"
-            ;;
-          minor)
-            minor=$((minor + 1))
-            patch=0
-            echo "🔍 DEBUG: Performing MINOR version bump"
-            ;;
-          patch|*)
-            patch=$((patch + 1))
-            echo "🔍 DEBUG: Performing PATCH version bump"
-            ;;
-        esac
-        
-        new_version="${major}.${minor}.${patch}"
-        echo "🔍 DEBUG: New version: $new_version"
-        echo "new_version=${new_version}" >> $GITHUB_OUTPUT
-        echo "previous_version=$current" >> $GITHUB_OUTPUT
-        
-        # Update version file
-        echo "🔍 DEBUG: Updating version file"
-        echo "## Version: ${new_version}" > version
-        echo "✅ Version file updated to $new_version"
-        echo "🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢"
+      env:
+        VERSION_BUMP: ${{ inputs.version_bump }}
+        CURRENT_VERSION: ${{ steps.current.outputs.current_version }}
+      run: ${{ github.action_path }}/ci/scripts/actions/bump-version.sh
 
     # Check if this is a release commit
     - name: Check for release commit
       id: check-release-commit
       shell: bash
-      run: |
-        echo "🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎"
-        echo "🔍 DEBUG: Checking if this is a release commit"
-        # Get the last commit message
-        commit_msg=$(git log -1 --pretty=%B)
-        echo "🔍 DEBUG: Last commit message: $commit_msg"
-        
-        # Check if it matches a release pattern
-        if [[ $commit_msg =~ [Rr][Ee][Ll][Ee][Aa][Ss][Ee][^0-9]*([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-          echo "🔍 DEBUG: ✓ This IS a release commit"
-          echo "is_release=true" >> $GITHUB_OUTPUT
-          echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
-          echo "✅ Detected release commit for version ${BASH_REMATCH[1]}"
-        else
-          echo "🔍 DEBUG: ✗ This is NOT a release commit"
-          echo "is_release=false" >> $GITHUB_OUTPUT
-          echo "version=" >> $GITHUB_OUTPUT
-          echo "ℹ️ Not a release commit"
-        fi
-        echo "🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎"
+      run: ${{ github.action_path }}/ci/scripts/actions/check-release-commit.sh
 
     # BUILD KIT (Required even in debug mode)
     - name: Build Kit
@@ -221,73 +133,25 @@ runs:
         KIT_NAME: ${{ inputs.kit_name }}
         KIT_VERSION: ${{ steps.version.outputs.new_version }}
         BUILD_ROOT: "build"
-      run: |
-        echo "🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️"
-        echo "🔍 DEBUG: Starting kit build process for $KIT_NAME v$KIT_VERSION"
-        sudo chmod -R a+rwx ./*
-        echo "🔍 DEBUG: Permissions updated for working directory"
-        
-        echo "🔍 DEBUG: Compiling kit..."
-        genesis compile-kit --force -v "$KIT_VERSION" -n "$KIT_NAME"
-        
-        echo "🔍 DEBUG: Setting up build directory"
-        sudo mkdir -p $BUILD_ROOT/
-        sudo chmod -R a+rwx $BUILD_ROOT/
-        cp ./$KIT_NAME-$KIT_VERSION.tar.gz $BUILD_ROOT/
-        
-        echo "🔍 DEBUG: Build directory contents:"
-        ls -lah $BUILD_ROOT/
-        echo "✅ Build completed successfully"
-        echo "🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️"
+      run: ${{ github.action_path }}/ci/scripts/actions/build-kit.sh
 
     # Conditionally run testing steps
-    - name: Create directories for spec check and release notes
-      if: inputs.debug_mode == 'true'
-      shell: bash
-      run: |
-        echo "🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞"
-        echo "🔍 DEBUG: Running in DEBUG MODE - Setting up without tests"
-        mkdir -p spec-check
-        mkdir -p release-notes
-        echo "🔍 DEBUG: Created directories for spec checks and release notes"
-        echo "⚠️ Debug mode enabled - skipping tests and proceeding directly to PR creation"
-        
-        # Create placeholder files for spec checks
-        echo "🔍 DEBUG: Creating placeholder files for spec checks"
-        echo "SKIPPED IN DEBUG MODE" > spec-check/diff-$(date -u +%Y%m%d%H%M%S)
-        
-        # Create placeholder for release notes
-        echo "🔍 DEBUG: Creating placeholder release notes"
-        echo "# Release Notes for ${{ inputs.kit_name }} v${{ steps.version.outputs.new_version }}" > release-notes/release-notes.md
-        echo "Generated in debug mode - no automated tests were run." >> release-notes/release-notes.md
-        echo "✅ Debug mode setup completed"
-        echo "🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞"
-
-    # Setting has_breaking_changes in debug mode
-    - name: Set breaking changes flag in debug mode
+    - name: Setup debug mode
       if: inputs.debug_mode == 'true'
       id: check-breaking-debug
       shell: bash
-      run: |
-        echo "🔍 DEBUG: Setting breaking changes flag to false in debug mode"
-        echo "has_breaking_changes=false" >> $GITHUB_OUTPUT
-        echo "ℹ️ Breaking changes detection skipped in debug mode"
+      env:
+        KIT_NAME: ${{ inputs.kit_name }}
+        VERSION: ${{ steps.version.outputs.new_version }}
+      run: ${{ github.action_path }}/ci/scripts/actions/setup-debug-mode.sh
 
     # RUN SPEC TESTS - Skip in debug mode
     - name: Setup Go for tests
       if: inputs.debug_mode != 'true'
       shell: bash
-      run: |
-        echo "🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪"
-        echo "🔍 DEBUG: Setting up Go for spec tests"
-        echo "🔍 DEBUG: Using Go version: ${{ inputs.go_version }}"
-        sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf ${{ inputs.go_version }}
-        echo "🔍 DEBUG: Installing Ginkgo test framework"
-        go install github.com/onsi/ginkgo/v2/ginkgo@latest
-        export PATH=$PATH:~/go/bin
-        echo "✅ Go setup completed"
-        go version
-        echo "🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪"
+      env:
+        GO_VERSION: ${{ inputs.go_version }}
+      run: ${{ github.action_path }}/ci/scripts/actions/setup-go.sh
 
     - name: Run Spec Tests
       if: inputs.debug_mode != 'true'
@@ -297,18 +161,8 @@ runs:
         GENESIS_SECRETS_TOKEN: ${{ inputs.secrets_token }}
         GENESIS_SECRETS_KEY: ${{ inputs.secrets_key }}
         KIT_VERSION: ${{ steps.version.outputs.new_version }}
-      run: |
-        echo "🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪"
-        echo "🔍 DEBUG: Running spec tests with Ginkgo"
-        sudo chmod -R a+rwx ./*
-        export PATH=$PATH:~/go/bin
-        
-        echo "🔍 DEBUG: Changing to spec directory and running tests"
-        cd spec
-        echo "🔍 DEBUG: Running ginkgo with params: ${{ inputs.ginkgo_params }}"
-        ginkgo ${{ inputs.ginkgo_params }} .
-        echo "✅ Spec tests completed successfully"
-        echo "🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪"
+        GINKGO_PARAMS: ${{ inputs.ginkgo_params }}
+      run: ${{ github.action_path }}/ci/scripts/actions/run-spec-tests.sh
 
     # SPEC CHANGE CHECK - Skip in debug mode
     - name: Check Specs for breaking changes
@@ -318,52 +172,15 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         CURRENT_VERSION: ${{ steps.version.outputs.new_version }}
         PREVIOUS_VERSION: ${{ steps.version.outputs.previous_version }}
-      run: |
-        echo "🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍"
-        echo "🔍 DEBUG: Checking for breaking changes in specs"
-        mkdir -p spec-check
-        echo "🔍 DEBUG: Created spec-check directory"
-        
-        # Get the most recent tag
-        echo "🔍 DEBUG: Fetching tags"
-        git fetch --tags
-        PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-        
-        if [[ -n "$PREV_TAG" ]]; then
-          echo "🔍 DEBUG: Found previous tag: $PREV_TAG"
-          echo "🔍 DEBUG: Checking out previous tag to compare specs"
-          git checkout $PREV_TAG
-          cp -r spec/results ./spec-check/old-specs
-          git checkout -
-        else
-          echo "🔍 DEBUG: No previous tag found, this appears to be the initial release"
-        fi
-        
-        results_file="${GITHUB_WORKSPACE}/spec-check/diff-$(date -u +%Y%m%d%H%M%S)"
-        if [[ -n "$PREV_TAG" ]]; then
-          echo "🔍 DEBUG: Generating spec comparison results"
-          echo "Comparing specs with previous release $PREV_TAG" > "$results_file"
-          ${{ github.action_path }}/ci/scripts/compare-release-specs.sh "$PREV_TAG" >> "$results_file"
-        else
-          echo "🔍 DEBUG: No comparison needed for initial release"
-          echo "Initial release - no spec changes to compare" > "$results_file"
-        fi
-        echo "✅ Spec comparison completed"
-        echo "🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍"
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: ${{ github.action_path }}/ci/scripts/actions/check-specs.sh
 
     - name: Check for breaking changes
       if: inputs.debug_mode != 'true'
       id: check-breaking
       shell: bash
-      run: |
-        echo "🔍 DEBUG: Checking for breaking changes in comparison results"
-        if grep -q "BREAKING CHANGE" spec-check/diff-*; then
-          echo "⚠️ BREAKING CHANGES DETECTED! ⚠️"
-          echo "has_breaking_changes=true" >> $GITHUB_OUTPUT
-        else
-          echo "✅ No breaking changes detected"
-          echo "has_breaking_changes=false" >> $GITHUB_OUTPUT
-        fi
+      run: ${{ github.action_path }}/ci/scripts/actions/check-breaking-changes.sh
 
     # INFRASTRUCTURE SETUP FOR DEPLOYMENT - Skip in debug mode
     - name: Setup Infrastructure
@@ -375,64 +192,16 @@ runs:
         GCP_SERVICE_ACCOUNT_KEY: ${{ inputs.gcp_service_account_key }}
         VSPHERE_USERNAME: ${{ inputs.vsphere_username }}
         VSPHERE_PASSWORD: ${{ inputs.vsphere_password }}
-      run: |
-        echo "🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️" 
-        echo "🔍 DEBUG: Setting up infrastructure for ${{ inputs.iaas_provider }}"
-        # Install infrastructure-specific tools
-        case "${{ inputs.iaas_provider }}" in
-          vsphere)
-            # VSphere specific setup
-            echo "🔍 DEBUG: Setting up VSphere tools..."
-            # Configure VSphere credentials
-            mkdir -p ~/.vsphere
-            echo "$VSPHERE_USERNAME" > ~/.vsphere/username
-            echo "$VSPHERE_PASSWORD" > ~/.vsphere/password
-            echo "✅ VSphere credentials configured"
-            ;;
-          aws)
-            # AWS specific setup
-            echo "🔍 DEBUG: Setting up AWS CLI..."
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            sudo ./aws/install
-            # Configure AWS credentials
-            echo "🔍 DEBUG: Configuring AWS credentials"
-            mkdir -p ~/.aws
-            cat > ~/.aws/credentials << EOF
-        [default]
-        aws_access_key_id = $AWS_ACCESS_KEY_ID
-        aws_secret_access_key = $AWS_SECRET_ACCESS_KEY
-        EOF
-            echo "✅ AWS CLI installed and configured"
-            ;;
-          gcp)
-            # GCP specific setup
-            echo "🔍 DEBUG: Setting up GCP CLI..."
-            echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
-            curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
-            sudo apt-get update && sudo apt-get install google-cloud-cli
-            # Configure GCP credentials
-            echo "🔍 DEBUG: Configuring GCP service account"
-            echo "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/gcp-key.json
-            gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
-            rm /tmp/gcp-key.json
-            echo "✅ GCP CLI installed and configured"
-            ;;
-        esac
-        echo "✅ Infrastructure setup completed for ${{ inputs.iaas_provider }}"
-        echo "🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️" 
+        IAAS_PROVIDER: ${{ inputs.iaas_provider }}
+      run: ${{ github.action_path }}/ci/scripts/actions/setup-infrastructure.sh
     
     # VAULT SETUP - Skip in debug mode
     - name: Setup Vault
       if: inputs.debug_mode != 'true'
       shell: bash
-      run: |
-        echo "🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐"
-        echo "🔍 DEBUG: Setting up Vault"
-        sudo chmod -R a+rwx ./*
-        ${{ github.action_path }}/ci/scripts/init-vault.sh
-        echo "✅ Vault setup completed"
-        echo "🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: ${{ github.action_path }}/ci/scripts/actions/setup-vault.sh
 
     # DEPLOYMENT TEST - Skip in debug mode
     - name: Deploy and Test
@@ -454,19 +223,8 @@ runs:
         KIT_VERSION: ${{ steps.version.outputs.new_version }}
         KIT_SHORTNAME: ${{ inputs.kit_name }}
         BUILD_ROOT: "build"
-      run: |
-        echo "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀"
-        echo "🔍 DEBUG: Starting deployment test to environment $DEPLOY_ENV"
-        sudo mkdir -p $CI_ROOT/ci/
-        sudo chmod a+rwx $CI_ROOT/ci/
-        echo "🔍 DEBUG: Setting up CI scripts and environments"
-        cp -r ${{ github.action_path }}/ci/scripts/* $CI_ROOT/ci/ci/scripts/
-        cp -r ./ci/envs/ $CI_ROOT/ci/envs/
-        
-        echo "🔍 DEBUG: Launching deployment script"
-        ${{ github.action_path }}/ci/scripts/deploy.sh
-        echo "✅ Deployment and testing completed successfully"
-        echo "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀"
+        ACTION_PATH: ${{ github.action_path }}
+      run: ${{ github.action_path }}/ci/scripts/actions/deploy-and-test.sh
 
     # GENERATE RELEASE NOTES - Simplified in debug mode
     - name: Generate Release Notes
@@ -476,19 +234,9 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         KIT_SHORTNAME: ${{ inputs.kit_name }}
         RELEASE_NOTES_FILE: "release-notes.md"
-        GITHUB_ACCESS_TOKEN: ${{ inputs.github_token }}
-      run: |
-        echo "📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝"
-        echo "🔍 DEBUG: Generating release notes"
-        mkdir -p release-notes
-        echo "🔍 DEBUG: Running release notes script for version ${{ steps.version.outputs.new_version }}"
-        ${{ github.action_path }}/ci/scripts/release-notes.sh \
-          "${{ steps.version.outputs.new_version }}" \
-          "$(pwd)" \
-          "$PREV_TAG" \
-          "release-notes/$RELEASE_NOTES_FILE"
-        echo "✅ Release notes generated"
-        echo "📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝"
+        VERSION: ${{ steps.version.outputs.new_version }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: ${{ github.action_path }}/ci/scripts/actions/generate-release-notes.sh
 
     # CREATE PR FOR RELEASE OR MANUAL TRIGGER
     - name: Create Pull Request for Release
@@ -499,84 +247,9 @@ runs:
         KIT_NAME: ${{ inputs.kit_name }}
         VERSION: ${{ steps.check-release-commit.outputs.is_release == 'true' && steps.check-release-commit.outputs.version || steps.version.outputs.new_version }}
         RELEASE_BRANCH: ${{ inputs.release_branch }}
-      run: |
-        echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"
-        echo "🔍 DEBUG: Creating pull request for release v${VERSION}"
-        git config --global user.name "Genesis CI Bot"
-        git config --global user.email "genesis-ci@example.com"
-        echo "🔍 DEBUG: Git user configured as Genesis CI Bot"
-        
-        # Create release branch if it doesn't exist
-        release_branch="release/v${VERSION}"
-        echo "🔍 DEBUG: Working with release branch: $release_branch"
-        
-        # Check if release branch exists remotely
-        echo "🔍 DEBUG: Checking if release branch already exists"
-        if git ls-remote --heads origin $release_branch | grep -q $release_branch; then
-          echo "🔍 DEBUG: Release branch $release_branch already exists, checking it out"
-          git fetch origin
-          git checkout $release_branch || git checkout -b $release_branch origin/$release_branch
-        else
-          echo "🔍 DEBUG: Creating new release branch $release_branch"
-          git checkout -b $release_branch
-        fi
-        
-        # Commit changes if any
-        echo "🔍 DEBUG: Adding and committing changes"
-        git add -A
-        if [[ "${{ inputs.debug_mode }}" == "true" ]]; then
-          git commit -m "Prepare release v${VERSION} (debug mode)" || echo "🔍 DEBUG: No changes to commit"
-        else
-          git commit -m "Prepare release v${VERSION}" || echo "🔍 DEBUG: No changes to commit"
-        fi
-        
-        # Push branch
-        echo "🔍 DEBUG: Pushing branch to origin"
-        git push --set-upstream https://${{ inputs.github_token }}@github.com/${{ github.repository }} $release_branch || echo "⚠️ Push failed. Please check your credentials and permissions."
-        
-        # Check if PR already exists
-        echo "🔍 DEBUG: Checking if PR already exists"
-        PR_EXISTS=$(curl -s -X GET \
-          -H "Authorization: token $GITHUB_TOKEN" \
-          -H "Accept: application/vnd.github.v3+json" \
-          "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls?head=release/v${VERSION}&base=${RELEASE_BRANCH}&state=open" | jq length)
-        
-        if [[ "$PR_EXISTS" -gt 0 ]]; then
-          echo "🔍 DEBUG: PR already exists for this release branch, skipping PR creation"
-        else
-          # Create PR if it doesn't exist
-          echo "🔍 DEBUG: Creating new PR for release"
-          pr_title="Release v${VERSION}"
-          if [[ "${{ inputs.debug_mode }}" == "true" ]]; then
-            pr_title="${pr_title} (MANUAL RELEASE - NO TESTS)"
-          fi
-          
-          pr_body="Release preparation for version ${VERSION}
-
-          $(if [[ "${{ inputs.debug_mode }}" == "true" ]]; then
-            echo "⚠️ MANUAL RELEASE - TESTING WAS SKIPPED ⚠️"
-            echo "This PR was created in debug mode. No automated tests were run."
-          else
-            echo "Generated from release commit."
-          fi)
-
-          $(cat release-notes/release-notes.md 2>/dev/null || echo "No release notes available.")"
-          
-          # Create PR
-          echo "🔍 DEBUG: Sending PR creation request to GitHub API"
-          curl -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls" \
-            -d '{
-              "title": "'"${pr_title}"'",
-              "body": "'"${pr_body}"'",
-              "head": "'"${release_branch}"'",
-              "base": "'"${RELEASE_BRANCH}"'"
-            }'
-        fi
-        echo "✅ Pull request process completed"
-        echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"
+        DEBUG_MODE: ${{ inputs.debug_mode }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: ${{ github.action_path }}/ci/scripts/actions/create-pr.sh
 
     - name: Add explanation comment to PR
       if: (steps.check-release-commit.outputs.is_release == 'true' || inputs.debug_mode == 'true')
@@ -586,83 +259,8 @@ runs:
         KIT_NAME: ${{ inputs.kit_name }}
         VERSION: ${{ steps.check-release-commit.outputs.is_release == 'true' && steps.check-release-commit.outputs.version || steps.version.outputs.new_version }}
         PR_COMMENT_FILE: "${{ github.action_path }}/docs/pr-comment-template.md"
-      run: |
-        echo "💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬"
-        echo "🔍 DEBUG: Adding explanation comment to pull request"
-        # Get the PR number from the previous step
-        echo "🔍 DEBUG: Fetching PR information"
-        PR_RESPONSE=$(curl -s -X GET \
-          -H "Authorization: token $GITHUB_TOKEN" \
-          -H "Accept: application/vnd.github.v3+json" \
-          "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls?head=release/v${VERSION}&base=${{ inputs.release_branch }}&state=open")
-
-        PR_NUMBER=$(echo "$PR_RESPONSE" | jq -r '.[0].number')
-
-        if [[ "$PR_NUMBER" == "null" || -z "$PR_NUMBER" ]]; then
-          echo "⚠️ Could not find the PR number. Cannot add comment."
-          exit 1
-        fi
-
-        echo "🔍 DEBUG: Found PR #$PR_NUMBER"
-
-        # Read the comment template file or use default if not found
-        echo "🔍 DEBUG: Looking for PR comment template"
-        if [[ -f "$PR_COMMENT_FILE" ]]; then
-          PR_COMMENT=$(cat "$PR_COMMENT_FILE")
-          echo "🔍 DEBUG: Using comment template from file"
-        else
-          # Default comment if template file doesn't exist
-          echo "🔍 DEBUG: Template file not found, using default comment"
-          if [[ "${{ inputs.debug_mode }}" == "true" ]]; then
-            PR_COMMENT="# Manual Release Process for ${KIT_NAME} v${VERSION}
-
-            This PR was manually created in debug mode for version ${VERSION}.
-            
-            ## ⚠️ IMPORTANT: No automated tests were run! ⚠️
-            
-            ## What happens next:
-            1. Review the changes
-            2. Run any necessary manual tests before merging
-            3. Approve and merge this PR to complete the release
-            4. The GitHub release will be automatically created after merging
-            
-            ## Breaking Changes
-            Testing was skipped, so no automated breaking change detection was performed.
-            Please review changes manually before merging."
-          else
-            # Default comment if template file doesn't exist and not in debug mode
-            PR_COMMENT="# Release Process for ${KIT_NAME} v${VERSION}
-
-            This PR was automatically created as part of the release process for version ${VERSION}.
-            
-            ## What happens next:
-            1. Review the changes and release notes
-            2. Run any additional manual tests if needed
-            3. Approve and merge this PR to complete the release
-            4. The GitHub release will be automatically created after merging
-            
-            ## Breaking Changes
-            $(grep -A 5 "BREAKING CHANGE" spec-check/diff-* 2>/dev/null || echo "No breaking changes detected")
-            
-            For more information, see the [release documentation](https://your-docs-link)."
-          fi
-          echo "🔍 DEBUG: Default comment template prepared"
-        fi
-
-        # Replace placeholders in the comment
-        echo "🔍 DEBUG: Replacing placeholders in comment template"
-        PR_COMMENT=${PR_COMMENT//\{\{VERSION\}\}/$VERSION}
-        PR_COMMENT=${PR_COMMENT//\{\{KIT_NAME\}\}/$KIT_NAME}
-
-        # Create a comment on the PR
-        echo "🔍 DEBUG: Posting comment to PR #$PR_NUMBER"
-        curl -X POST \
-          -H "Authorization: token $GITHUB_TOKEN" \
-          -H "Accept: application/vnd.github.v3+json" \
-          "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
-          -d "{
-            \"body\": $(echo "$PR_COMMENT" | jq -Rs .)
-          }"
-
-        echo "✅ Comment added to PR #$PR_NUMBER"
-        echo "💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬"
+        DEBUG_MODE: ${{ inputs.debug_mode }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        ACTION_PATH: ${{ github.action_path }}
+        RELEASE_BRANCH: ${{ inputs.release_branch }}
+      run: ${{ github.action_path }}/ci/scripts/actions/add-pr-comment.sh
