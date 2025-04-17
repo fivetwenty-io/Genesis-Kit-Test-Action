@@ -532,7 +532,7 @@ runs:
         
         # Push branch
         echo "🔍 DEBUG: Pushing branch to origin"
-        git push origin $release_branch
+        git push --set-upstream https://${{ inputs.github_token }}@github.com/${{ github.repository }} $release_branch || echo "⚠️ Push failed. Please check your credentials and permissions."
         
         # Check if PR already exists
         echo "🔍 DEBUG: Checking if PR already exists"
