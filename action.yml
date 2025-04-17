@@ -103,6 +103,7 @@ runs:
         sudo apt-get install -y build-essential unzip jq
         
         # Install Genesis dependencies
+        sudo chmod -R a+rwx ${{ github.action_path }}/scripts/*
         ${{ github.action_path }}/scripts/ensure-tools.sh
 
     # VERSION MANAGEMENT
