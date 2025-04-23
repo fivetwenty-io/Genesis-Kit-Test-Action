@@ -13,6 +13,12 @@ sudo apt-get install -y build-essential unzip jq
 # Echo GitHub Action path
 echo "🔍 DEBUG: GitHub Action path: ${GITHUB_ACTION_PATH}"
 
+echo "🔍 DEBUG: Contents of GitHub Action path:"
+ls -la "${GITHUB_ACTION_PATH}"
+
+echo "🔍 DEBUG: Contents of GitHub Action path /var/run/act/actions/:
+ls -la "/var/run/act/actions/"
+
 # Install Genesis dependencies
 echo "🔍 DEBUG: Updating permissions for scripts"
 sudo chmod -R a+rwx "${GITHUB_ACTION_PATH}/ci/scripts/*"

@@ -4,6 +4,9 @@ set -e
 echo "🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️" 
 echo "🔍 DEBUG: Setting up infrastructure for $IAAS_PROVIDER"
 # Install infrastructure-specific tools
+
+# TODO: Look back at the concourse pipelienes to see about re-generalizing this
+
 case "$IAAS_PROVIDER" in
   vsphere)
     # VSphere specific setup
