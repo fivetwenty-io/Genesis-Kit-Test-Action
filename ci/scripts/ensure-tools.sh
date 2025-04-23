@@ -18,7 +18,7 @@ sudo mv ./safe-linux-amd64 /bin/safe
 sudo mv ./spruce-linux-amd64 /bin/spruce
 sudo mv ./genesis /bin/genesis
 
-chmod u+x ${github.action_path}/ci/scripts/compare-release-specs.sh
+chmod u+x "$(dirname "$0")/compare-release-specs.sh"
 chmod u+x /usr/local/bin/bosh
 chmod u+x /bin/credhub
 chmod u+x /bin/safe
