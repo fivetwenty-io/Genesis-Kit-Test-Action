@@ -7,7 +7,7 @@ sudo chmod -R a+rwx ./*
 echo "🔍 DEBUG: Permissions updated for working directory"
 
 # Install common tools
-./setup-tools.sh
+"$(dirname "$0")/setup-tools.sh"
 
 echo "🔍 DEBUG: Compiling kit..."
 genesis compile-kit --force -v "$KIT_VERSION" -n "$KIT_NAME"
