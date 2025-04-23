@@ -27,7 +27,7 @@ ls -la /var/run/act/actions/
 
 # Install Genesis dependencies
 echo "🔍 DEBUG: Updating permissions for scripts"
-sudo chmod -R a+rwx "${GITHUB_ACTION_PATH}/ci/scripts/*"
+sudo chmod -R a+rwx "${GITHUB_ACTION_PATH}/ci/scripts"
 echo "✅ Permissions updated for scripts"
 
 echo "🔍 DEBUG: Installing Genesis and dependencies"
