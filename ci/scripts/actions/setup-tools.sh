@@ -16,6 +16,10 @@ echo "🔍 DEBUG: GitHub Action path: ${GITHUB_ACTION_PATH}"
 echo "🔍 DEBUG: Contents of GitHub Action path:"
 ls -la "${GITHUB_ACTION_PATH}"
 
+echo "🔍 DEBUG: Contents of GitHub Action path ./ci:"
+ls -la "${GITHUB_ACTION_PATH}/ci"
+
+
 echo "🔍 DEBUG: Contents of GitHub Action path /var/run/act/actions/:"
 ls -la /var/run/act/actions/
 
