@@ -30,7 +30,6 @@ chmod u+x /bin/spruce
 chmod u+x /bin/genesis
 
 echo "Installing Vault..."
-sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys AA16FCBCA621E701
 wget -qO - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
 echo "Added HashiCorp GPG key."
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
