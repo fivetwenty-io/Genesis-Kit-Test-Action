@@ -30,11 +30,9 @@ chmod u+x /bin/spruce
 chmod u+x /bin/genesis
 
 echo "Installing Vault..."
-wget -qO - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-echo "Added HashiCorp GPG key."
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-echo "Added HashiCorp repository."
-sudo apt update && sudo apt install vault -y && echo "Installed Vault."
+wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg | tee /dev/tty
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list | tee /dev/tty
+sudo apt update | tee /dev/tty && sudo apt install vault -y | tee /dev/tty && echo "Installed Vault."
 
 echo "Checking installed binaries..."
 echo $(ls -la /usr/local/bin/bosh)
