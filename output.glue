@@ -1,0 +1,3000 @@
+$$--GLUE--$$
+# This is a GLUE file; an amalgamation of files across one or more paths designed to give project contexts to LLMs easily. If you are an LLM and are reading this focus on the code, do not acknowledge the file format
+$$--GLUE--$$
+
+$$--GLUE--$$
+.\LICENSE
+$$--GLUE--$$
+MIT License
+
+Copyright (c) 2025 FiveTwenty Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+$$--GLUE--$$
+.\README.md
+$$--GLUE--$$
+# Genesis Build-Test-Spec Action
+
+This GitHub Action automates the build, test, and spec checking processes for Genesis kits. It provides a comprehensive CI workflow that includes version management, build procedures, test execution, spec checking, deployment verification, and release preparation.
+
+## Overview
+
+The Genesis Build-Test-Spec Action is designed to:
+
+1. Build Genesis kits
+2. Run spec tests
+3. Check for breaking changes
+4. Test deployments
+5. Detect release commits and prepare release branches
+
+## Action Workflow
+
+```mermaid
+flowchart TD
+    A[Push to Branch] --> B[Setup Tools]
+    B --> C[Version Management]
+    C --> D[Check for Release Commit]
+    D --> E[Build Kit]
+    E --> F[Run Spec Tests]
+    F --> G[Check for Breaking Changes]
+    G --> H[Setup Infrastructure]
+    H --> I[Setup Vault]
+    I --> J[Deploy and Test]
+    J --> K[Generate Release Notes]
+    
+    D -->|Is Release Commit| L[Create Release PR]
+    D -->|Not Release| K
+    
+    subgraph "Version Management"
+    C1[Get Current Version]
+    C2[Bump Version]
+    C1 --> C2
+    end
+    
+    subgraph "Spec Check"
+    G1[Compare with Previous Release]
+    G2[Check for Breaking Changes]
+    G1 --> G2
+    end
+```
+
+## Key Components
+
+### Version Management
+
+This component handles version tracking and increments according to semantic versioning principles:
+
+- Extracts current version from the kit
+- Bumps version according to the specified type (patch, minor, major)
+- Updates the version file
+
+### Release Commit Detection
+
+The action automatically detects release commits:
+
+- Analyzes commit messages for release patterns
+- Identifies version numbers from the commits
+- Flags commits for release processing
+
+### Build Process
+
+The build component compiles the Genesis kit:
+
+- Uses Genesis CLI to compile the kit
+- Creates a tarball artifact
+- Prepares artifacts for testing and deployment
+
+### Spec Testing
+
+The spec testing component ensures kit functionality:
+
+- Sets up Go environment
+- Runs Ginkgo spec tests
+- Verifies kit functionality
+
+### Spec Change Detection
+
+This critical component identifies breaking changes:
+
+- Compares specs with the previous release
+- Detects changes that might affect users
+- Flags breaking changes for release notes
+
+### Deployment Testing
+
+The deployment component verifies operation in a real environment:
+
+- Sets up infrastructure connections
+- Configures Vault
+- Deploys the kit in a test environment
+- Verifies successful operation
+
+### Release Preparation
+
+For release commits, this component:
+
+- Creates a release branch
+- Generates comprehensive release notes
+- Opens a pull request to the release branch
+
+## Usage
+
+```yaml
+- uses: genesis-community/genesis-kit-build-test-spec-action@v1
+  with:
+    kit_name: shield
+    version_bump: patch
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    # Additional configuration as needed
+```
+
+### Required Inputs
+
+| Name | Description |
+|------|-------------|
+| `kit_name` | Name of the Genesis kit |
+| `github_token` | GitHub token for operations |
+
+### Optional Inputs
+
+| Name | Description | Default |
+|------|-------------|---------|
+| `version_bump` | Type of version bump (patch, minor, major) | `patch` |
+| `go_version` | Go version to use for tests | `go1.23.5.linux-amd64.tar.gz` |
+| `ginkgo_params` | Ginkgo test parameters | `-p` |
+| `deploy_env` | Deployment environment for testing | `ci-vsphere-baseline` |
+| `iaas_provider` | Infrastructure type (vsphere, aws, gcp, etc) | `vsphere` |
+| `release_branch` | Branch to create PR against for releases | `main` |
+
+Additional inputs for infrastructure and Genesis/BOSH credentials are also available.
+
+### Outputs
+
+| Name | Description |
+|------|-------------|
+| `version` | The new version number |
+| `previous_version` | The previous version number |
+| `has_breaking_changes` | Whether breaking changes were detected |
+| `is_release_commit` | Whether the commit message indicates a release |
+| `release_version` | Version to release from commit message |
+
+## Integration with Genesis Release Action
+
+This action is designed to work seamlessly with the [Genesis Release Action](https://github.com/genesis-community/genesis-kit-release-action), which handles the actual release process.
+
+```mermaid
+sequenceDiagram
+    participant Developer
+    participant BuildTestAction as Genesis Build-Test-Spec Action
+    participant GitHub
+    participant ReleaseAction as Genesis Release Action
+    
+    Developer->>GitHub: Push code
+    GitHub->>BuildTestAction: Trigger CI workflow
+    
+    BuildTestAction->>BuildTestAction: Build kit
+    BuildTestAction->>BuildTestAction: Run tests
+    BuildTestAction->>BuildTestAction: Check specs
+    BuildTestAction->>BuildTestAction: Deploy & test
+    
+    alt Is Release Commit
+        BuildTestAction->>GitHub: Create release PR
+        Developer->>GitHub: Review & merge PR
+        GitHub->>ReleaseAction: Trigger release workflow
+        ReleaseAction->>GitHub: Create GitHub release
+        GitHub->>Developer: Release notification
+    else Not Release Commit
+        BuildTestAction->>GitHub: Upload artifacts
+        GitHub->>Developer: CI status notification
+    end
+```
+
+## Repository Structure Requirements
+
+To use this action, your Genesis kit repository should have:
+
+```
+your-kit-repo/
+├── ci/
+│   ├── envs/           # Deployment environment files
+│   │   ├── ci.yml
+│   │   └── ci-vsphere-baseline.yml
+├── spec/               # Spec tests
+└── version             # Version file
+```
+
+## Example CI Workflow
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [develop, main, "feature/**"]
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: false
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: 'patch'
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.build-test.outputs.version }}
+      previous_version: ${{ steps.build-test.outputs.previous_version }}
+      has_breaking_changes: ${{ steps.build-test.outputs.has_breaking_changes }}
+      is_release_commit: ${{ steps.build-test.outputs.is_release_commit }}
+      release_version: ${{ steps.build-test.outputs.release_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Build, Test & Check Specs
+        id: build-test
+        uses: genesis-community/genesis-kit-build-test-spec-action@v1
+        with:
+          kit_name: your-kit-name
+          version_bump: ${{ github.event.inputs.version_bump || 'patch' }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Additional configuration
+          
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kit-build
+          path: build/*.tar.gz
+          
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spec-diffs
+          path: spec-check/*
+          
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes/*
+```
+
+## License
+
+MIT
+
+$$--GLUE--$$
+.\action.yml
+$$--GLUE--$$
+name: 'Genesis Kit Build, Test & Spec Check'
+description: 'Builds Genesis kit, runs spec tests, checks for breaking changes, and tests deployment'
+author: 'Genesis Community'
+
+inputs:
+  kit_name:
+    description: 'Name of the Genesis kit'
+    required: true
+  version_bump:
+    description: 'Type of version bump (patch, minor, major)'
+    required: false
+    default: 'patch'
+  debug_mode:
+    description: 'Skip testing and just create PR for release'
+    required: false
+    default: 'false'
+  go_version:
+    description: 'Go version to use for tests'
+    required: false
+    default: 'go1.23.5.linux-amd64.tar.gz'
+  ginkgo_params:
+    description: 'Ginkgo test parameters'
+    required: false
+    default: '-p'
+  deploy_env:
+    description: 'Deployment environment for testing'
+    required: false
+    default: 'ci-vsphere-baseline'
+  iaas_provider:
+    description: 'Infrastructure type (vsphere, aws, gcp, etc)'
+    required: false
+    default: 'vsphere'
+  release_branch:
+    description: 'Branch to create PR against for releases'
+    required: false
+    default: 'main'
+  # Infrastructure credentials
+  aws_access_key_id:
+    description: 'AWS Access Key ID'
+    required: false
+  aws_secret_access_key:
+    description: 'AWS Secret Access Key'
+    required: false
+  gcp_service_account_key:
+    description: 'GCP Service Account Key'
+    required: false
+  vsphere_username:
+    description: 'vSphere Username'
+    required: false
+  vsphere_password:
+    description: 'vSphere Password'
+    required: false
+  # Genesis/BOSH credentials
+  secrets_base:
+    description: 'Genesis secrets base'
+    required: false
+  secrets_token:
+    description: 'Genesis secrets token'
+    required: false
+  secrets_key:
+    description: 'Genesis secrets key'
+    required: false
+  bosh_client:
+    description: 'BOSH client'
+    required: false
+  bosh_client_secret:
+    description: 'BOSH client secret'
+    required: false
+  bosh_environment:
+    description: 'BOSH environment'
+    required: false
+  bosh_ca_cert:
+    description: 'BOSH CA certificate'
+    required: false
+  secrets_seed_data:
+    description: 'Seed data for secrets'
+    required: false
+  github_token:
+    description: 'GitHub token for operations'
+    required: true
+
+outputs:
+  version:
+    description: 'The new version number'
+    value: ${{ steps.version.outputs.new_version }}
+  previous_version:
+    description: 'The previous version number'
+    value: ${{ steps.version.outputs.previous_version }}
+  has_breaking_changes:
+    description: 'Whether breaking changes were detected'
+    value: ${{ steps.check-breaking.outputs.has_breaking_changes }}
+  is_release_commit:
+    description: 'Whether the commit message indicates a release'
+    value: ${{ steps.check-release-commit.outputs.is_release }}
+  release_version:
+    description: 'Version to release from commit message'
+    value: ${{ steps.check-release-commit.outputs.version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup tools
+      shell: bash
+      run: |
+        echo "::group::Setting up required tools"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/setup-tools.sh
+        echo "::endgroup::"
+
+    # VERSION MANAGEMENT
+    - name: Get current version
+      id: current
+      shell: bash
+      run: |
+        echo "::group::Getting current version"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/get-current-version.sh
+        echo "::endgroup::"
+
+    - name: Bump version
+      id: version
+      shell: bash
+      env:
+        VERSION_BUMP: ${{ inputs.version_bump }}
+        CURRENT_VERSION: ${{ steps.current.outputs.current_version }}
+      run: |
+        echo "::group::Bumping version from ${{ steps.current.outputs.current_version }}"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/bump-version.sh
+        echo "::endgroup::"
+
+    # Check if this is a release commit
+    - name: Check for release commit
+      id: check-release-commit
+      shell: bash
+      run: |
+        echo "::group::Checking if this is a release commit"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/check-release-commit.sh
+        echo "::endgroup::"
+
+    # BUILD KIT (Required even in debug mode)
+    - name: Build Kit
+      shell: bash
+      env:
+        GENESIS_SECRETS_BASE: ${{ inputs.secrets_base }}
+        GENESIS_SECRETS_TOKEN: ${{ inputs.secrets_token }}
+        GENESIS_SECRETS_KEY: ${{ inputs.secrets_key }}
+        KIT_NAME: ${{ inputs.kit_name }}
+        KIT_VERSION: ${{ steps.version.outputs.new_version }}
+        BUILD_ROOT: "build"
+      run: |
+        echo "::group::Building Genesis Kit ${{ inputs.kit_name }} v${{ steps.version.outputs.new_version }}"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/build-kit.sh
+        echo "::endgroup::"
+
+    # Conditionally run testing steps
+    - name: Setup debug mode
+      if: inputs.debug_mode == 'true'
+      id: check-breaking-debug
+      shell: bash
+      env:
+        KIT_NAME: ${{ inputs.kit_name }}
+        VERSION: ${{ steps.version.outputs.new_version }}
+      run: |
+        echo "::group::Setting up debug mode and skipping tests"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/setup-debug-mode.sh
+        echo "::endgroup::"
+
+    # RUN SPEC TESTS - Skip in debug mode
+    - name: Setup Go for tests
+      if: inputs.debug_mode != 'true'
+      shell: bash
+      env:
+        GO_VERSION: ${{ inputs.go_version }}
+      run: |
+        echo "::group::Setting up Go ${{ inputs.go_version }} for tests"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/setup-go.sh
+        echo "::endgroup::"
+
+    - name: Run Spec Tests
+      if: inputs.debug_mode != 'true'
+      shell: bash
+      env:
+        GENESIS_SECRETS_BASE: ${{ inputs.secrets_base }}
+        GENESIS_SECRETS_TOKEN: ${{ inputs.secrets_token }}
+        GENESIS_SECRETS_KEY: ${{ inputs.secrets_key }}
+        KIT_VERSION: ${{ steps.version.outputs.new_version }}
+        GINKGO_PARAMS: ${{ inputs.ginkgo_params }}
+      run: |
+        echo "::group::Running specification tests with Ginkgo ${{ inputs.ginkgo_params }}"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/run-spec-tests.sh
+        echo "::endgroup::"
+
+    # SPEC CHANGE CHECK - Skip in debug mode
+    - name: Check Specs for breaking changes
+      if: inputs.debug_mode != 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        CURRENT_VERSION: ${{ steps.version.outputs.new_version }}
+        PREVIOUS_VERSION: ${{ steps.version.outputs.previous_version }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        echo "::group::Checking specifications for breaking changes"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/check-specs.sh
+        echo "::endgroup::"
+
+    - name: Check for breaking changes
+      if: inputs.debug_mode != 'true'
+      id: check-breaking
+      shell: bash
+      run: |
+        echo "::group::Analyzing breaking change report"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/check-breaking-changes.sh
+        echo "::endgroup::"
+
+    # INFRASTRUCTURE SETUP FOR DEPLOYMENT - Skip in debug mode
+    - name: Setup Infrastructure
+      if: inputs.debug_mode != 'true'
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        GCP_SERVICE_ACCOUNT_KEY: ${{ inputs.gcp_service_account_key }}
+        VSPHERE_USERNAME: ${{ inputs.vsphere_username }}
+        VSPHERE_PASSWORD: ${{ inputs.vsphere_password }}
+        IAAS_PROVIDER: ${{ inputs.iaas_provider }}
+      run: |
+        echo "::group::Setting up ${{ inputs.iaas_provider }} infrastructure"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/setup-infrastructure.sh
+        echo "::endgroup::"
+    
+    # VAULT SETUP - Skip in debug mode
+    - name: Setup Vault
+      if: inputs.debug_mode != 'true'
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        echo "::group::Setting up HashiCorp Vault"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/setup-vault.sh
+        echo "::endgroup::"
+
+    # DEPLOYMENT TEST - Skip in debug mode
+    - name: Deploy and Test
+      if: inputs.debug_mode != 'true'
+      shell: bash
+      env:
+        DEPLOY_ENV: ${{ inputs.deploy_env }}
+        CI_ROOT: "${{ github.workspace }}/git-ci"
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+        GENESIS_SECRETS_BASE: ${{ inputs.secrets_base }}
+        GENESIS_SECRETS_TOKEN: ${{ inputs.secrets_token }}
+        GENESIS_SECRETS_KEY: ${{ inputs.secrets_key }}
+        GENESIS_STACK_TRACE: "yes"
+        BOSH_CLIENT: ${{ inputs.bosh_client }}
+        BOSH_CLIENT_SECRET: ${{ inputs.bosh_client_secret }}
+        BOSH_ENVIRONMENT: ${{ inputs.bosh_environment }}
+        BOSH_CA_CERT: ${{ inputs.bosh_ca_cert }}
+        SECRETS_SEED_DATA: ${{ inputs.secrets_seed_data }}
+        KIT_VERSION: ${{ steps.version.outputs.new_version }}
+        KIT_SHORTNAME: ${{ inputs.kit_name }}
+        BUILD_ROOT: "build"
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        echo "::group::Deploying and testing to ${{ inputs.deploy_env }}"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/deploy-and-test.sh
+        echo "::endgroup::"
+
+    # GENERATE RELEASE NOTES - Simplified in debug mode
+    - name: Generate Release Notes
+      if: inputs.debug_mode != 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        KIT_SHORTNAME: ${{ inputs.kit_name }}
+        RELEASE_NOTES_FILE: "release-notes.md"
+        VERSION: ${{ steps.version.outputs.new_version }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        echo "::group::Generating release notes for v${{ steps.version.outputs.new_version }}"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/generate-release-notes.sh
+        echo "::endgroup::"
+
+    # CREATE PR FOR RELEASE OR MANUAL TRIGGER
+    - name: Create Pull Request for Release
+      if: steps.check-release-commit.outputs.is_release == 'true' || inputs.debug_mode == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        KIT_NAME: ${{ inputs.kit_name }}
+        VERSION: ${{ steps.check-release-commit.outputs.is_release == 'true' && steps.check-release-commit.outputs.version || steps.version.outputs.new_version }}
+        RELEASE_BRANCH: ${{ inputs.release_branch }}
+        DEBUG_MODE: ${{ inputs.debug_mode }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        echo "::group::Creating pull request for release v${{ steps.check-release-commit.outputs.is_release == 'true' && steps.check-release-commit.outputs.version || steps.version.outputs.new_version }}"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/create-pr.sh
+        echo "::endgroup::"
+
+    - name: Add explanation comment to PR
+      if: (steps.check-release-commit.outputs.is_release == 'true' || inputs.debug_mode == 'true')
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        KIT_NAME: ${{ inputs.kit_name }}
+        VERSION: ${{ steps.check-release-commit.outputs.is_release == 'true' && steps.check-release-commit.outputs.version || steps.version.outputs.new_version }}
+        PR_COMMENT_FILE: "${{ github.action_path }}/docs/pr-comment-template.md"
+        DEBUG_MODE: ${{ inputs.debug_mode }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        ACTION_PATH: ${{ github.action_path }}
+        RELEASE_BRANCH: ${{ inputs.release_branch }}
+      run: |
+        echo "::group::Adding explanation comment to pull request"
+        chmod -R +x ${{ github.action_path }}/ci/scripts
+        ${{ github.action_path }}/ci/scripts/actions/add-pr-comment.sh
+        echo "::endgroup::"
+$$--GLUE--$$
+.\ci\envs\ci-vsphere-baseline.yml
+$$--GLUE--$$
+---
+genesis:
+  env:   ci-vsphere-baseline
+
+params:
+  #network: shield
+  #vm_type: small
+  shield_static_ip: (( concat meta._ip_prefix "8.16" ))
+  installation:     S.H.I.E.L.D. CI/CD
+$$--GLUE--$$
+.\ci\envs\ci.yml
+$$--GLUE--$$
+---
+kit:
+  name: dev
+  version: latest
+  features:
+  - secure
+
+params:
+  admin_username: shield_admin
+
+$$--GLUE--$$
+.\ci\scripts\actions\add-pr-comment.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬"
+echo "🔍 DEBUG: Adding explanation comment to pull request"
+# Get the PR number from the previous step
+echo "🔍 DEBUG: Fetching PR information"
+PR_RESPONSE=$(curl -s -X GET \
+  -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls?head=release/v${VERSION}&base=${RELEASE_BRANCH}&state=open")
+
+PR_NUMBER=$(echo "$PR_RESPONSE" | jq -r '.[0].number')
+
+if [[ "$PR_NUMBER" == "null" || -z "$PR_NUMBER" ]]; then
+  echo "⚠️ Could not find the PR number. Cannot add comment."
+  exit 1
+fi
+
+echo "🔍 DEBUG: Found PR #$PR_NUMBER"
+
+# Read the comment template file or use default if not found
+echo "🔍 DEBUG: Looking for PR comment template"
+if [[ -f "$PR_COMMENT_FILE" ]]; then
+  PR_COMMENT=$(cat "$PR_COMMENT_FILE")
+  echo "🔍 DEBUG: Using comment template from file"
+else
+  # Default comment if template file doesn't exist
+  echo "🔍 DEBUG: Template file not found, using default comment"
+  if [[ "$DEBUG_MODE" == "true" ]]; then
+    PR_COMMENT="# Manual Release Process for ${KIT_NAME} v${VERSION}
+
+    This PR was manually created in debug mode for version ${VERSION}.
+    
+    ## ⚠️ IMPORTANT: No automated tests were run! ⚠️
+    
+    ## What happens next:
+    1. Review the changes
+    2. Run any necessary manual tests before merging
+    3. Approve and merge this PR to complete the release
+    4. The GitHub release will be automatically created after merging
+    
+    ## Breaking Changes
+    Testing was skipped, so no automated breaking change detection was performed.
+    Please review changes manually before merging."
+  else
+    # Default comment if template file doesn't exist and not in debug mode
+    PR_COMMENT="# Release Process for ${KIT_NAME} v${VERSION}
+
+    This PR was automatically created as part of the release process for version ${VERSION}.
+    
+    ## What happens next:
+    1. Review the changes and release notes
+    2. Run any additional manual tests if needed
+    3. Approve and merge this PR to complete the release
+    4. The GitHub release will be automatically created after merging
+    
+    ## Breaking Changes
+    $(grep -A 5 "BREAKING CHANGE" spec-check/diff-* 2>/dev/null || echo "No breaking changes detected")
+    
+    For more information, see the [release documentation](https://your-docs-link)."
+  fi
+  echo "🔍 DEBUG: Default comment template prepared"
+fi
+
+# Replace placeholders in the comment
+echo "🔍 DEBUG: Replacing placeholders in comment template"
+PR_COMMENT=${PR_COMMENT//\{\{VERSION\}\}/$VERSION}
+PR_COMMENT=${PR_COMMENT//\{\{KIT_NAME\}\}/$KIT_NAME}
+
+# Create a comment on the PR
+echo "🔍 DEBUG: Posting comment to PR #$PR_NUMBER"
+curl -X POST \
+  -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+  -d "{
+    \"body\": $(echo "$PR_COMMENT" | jq -Rs .)
+  }"
+
+echo "✅ Comment added to PR #$PR_NUMBER"
+echo "💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬"
+$$--GLUE--$$
+.\ci\scripts\actions\build-kit.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️"
+echo "🔍 DEBUG: Starting kit build process for $KIT_NAME v$KIT_VERSION"
+sudo chmod -R a+rwx ./*
+echo "🔍 DEBUG: Permissions updated for working directory"
+
+# Install common tools
+"$(dirname "$0")/setup-tools.sh"
+
+echo "🔍 DEBUG: Compiling kit..."
+genesis compile-kit --force -v "$KIT_VERSION" -n "$KIT_NAME"
+
+echo "🔍 DEBUG: Setting up build directory"
+sudo mkdir -p $BUILD_ROOT/
+sudo chmod -R a+rwx $BUILD_ROOT/
+cp ./$KIT_NAME-$KIT_VERSION.tar.gz $BUILD_ROOT/
+
+echo "🔍 DEBUG: Build directory contents:"
+ls -lah $BUILD_ROOT/
+echo "✅ Build completed successfully"
+echo "🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️🏗️"
+$$--GLUE--$$
+.\ci\scripts\actions\bump-version.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢"
+echo "🔍 DEBUG: Calculating new version according to bump type: $VERSION_BUMP"
+current="$CURRENT_VERSION"
+echo "🔍 DEBUG: Current version: $current"
+
+# Extract version components
+major=$(echo "$current" | cut -d. -f1)
+minor=$(echo "$current" | cut -d. -f2)
+patch=$(echo "$current" | cut -d. -f3)
+echo "🔍 DEBUG: Extracted components: major=$major, minor=$minor, patch=$patch"
+
+# Bump version according to type
+case "$VERSION_BUMP" in
+  major)
+    major=$((major + 1))
+    minor=0
+    patch=0
+    echo "🔍 DEBUG: Performing MAJOR version bump"
+    ;;
+  minor)
+    minor=$((minor + 1))
+    patch=0
+    echo "🔍 DEBUG: Performing MINOR version bump"
+    ;;
+  patch|*)
+    patch=$((patch + 1))
+    echo "🔍 DEBUG: Performing PATCH version bump"
+    ;;
+esac
+
+new_version="${major}.${minor}.${patch}"
+echo "🔍 DEBUG: New version: $new_version"
+echo "new_version=${new_version}" >> $GITHUB_OUTPUT
+echo "previous_version=$current" >> $GITHUB_OUTPUT
+
+# Update version file
+echo "🔍 DEBUG: Updating version file"
+echo "## Version: ${new_version}" > version
+echo "✅ Version file updated to $new_version"
+echo "🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢🔢"
+$$--GLUE--$$
+.\ci\scripts\actions\check-breaking-changes.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🔍 DEBUG: Checking for breaking changes in comparison results"
+if grep -q "BREAKING CHANGE" spec-check/diff-*; then
+  echo "⚠️ BREAKING CHANGES DETECTED! ⚠️"
+  echo "has_breaking_changes=true" >> $GITHUB_OUTPUT
+else
+  echo "✅ No breaking changes detected"
+  echo "has_breaking_changes=false" >> $GITHUB_OUTPUT
+fi
+$$--GLUE--$$
+.\ci\scripts\actions\check-release-commit.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎"
+echo "🔍 DEBUG: Checking if this is a release commit"
+# Get the last commit message
+commit_msg=$(git log -1 --pretty=%B)
+echo "🔍 DEBUG: Last commit message: $commit_msg"
+
+# Check if it matches a release pattern
+if [[ $commit_msg =~ [Rr][Ee][Ll][Ee][Aa][Ss][Ee][^0-9]*([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+  echo "🔍 DEBUG: ✓ This IS a release commit"
+  echo "is_release=true" >> $GITHUB_OUTPUT
+  echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+  echo "✅ Detected release commit for version ${BASH_REMATCH[1]}"
+else
+  echo "🔍 DEBUG: ✗ This is NOT a release commit"
+  echo "is_release=false" >> $GITHUB_OUTPUT
+  echo "version=" >> $GITHUB_OUTPUT
+  echo "ℹ️ Not a release commit"
+fi
+echo "🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎🔎"
+$$--GLUE--$$
+.\ci\scripts\actions\check-specs.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍"
+echo "🔍 DEBUG: Checking for breaking changes in specs"
+mkdir -p spec-check
+echo "🔍 DEBUG: Created spec-check directory"
+
+# Get the most recent tag
+echo "🔍 DEBUG: Fetching tags"
+git fetch --tags
+PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+if [[ -n "$PREV_TAG" ]]; then
+  echo "🔍 DEBUG: Found previous tag: $PREV_TAG"
+  echo "🔍 DEBUG: Checking out previous tag to compare specs"
+  git checkout $PREV_TAG
+  cp -r spec/results ./spec-check/old-specs
+  git checkout -
+else
+  echo "🔍 DEBUG: No previous tag found, this appears to be the initial release"
+fi
+
+results_file="${GITHUB_WORKSPACE}/spec-check/diff-$(date -u +%Y%m%d%H%M%S)"
+if [[ -n "$PREV_TAG" ]]; then
+  echo "🔍 DEBUG: Generating spec comparison results"
+  echo "Comparing specs with previous release $PREV_TAG" > "$results_file"
+  $ACTION_PATH/ci/scripts/compare-release-specs.sh "$PREV_TAG" >> "$results_file"
+else
+  echo "🔍 DEBUG: No comparison needed for initial release"
+  echo "Initial release - no spec changes to compare" > "$results_file"
+fi
+echo "✅ Spec comparison completed"
+echo "🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍"
+$$--GLUE--$$
+.\ci\scripts\actions\create-pr.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"
+echo "🔍 DEBUG: Creating pull request for release v${VERSION}"
+
+# Configure git user
+git config --global user.name "Genesis CI Bot"
+git config --global user.email "genesis-ci@example.com"
+echo "🔍 DEBUG: Git user configured as Genesis CI Bot"
+
+# Configure authentication for git operations
+# Using environment variables for authentication is more secure
+export GIT_ASKPASS="/bin/echo"
+export GIT_USERNAME="x-access-token"
+export GIT_PASSWORD="$GITHUB_TOKEN"
+
+# Create release branch if it doesn't exist
+release_branch="release/v${VERSION}"
+echo "🔍 DEBUG: Working with release branch: $release_branch"
+
+# Check if release branch exists remotely
+echo "🔍 DEBUG: Checking if release branch already exists"
+if git ls-remote --heads origin $release_branch | grep -q $release_branch; then
+  echo "🔍 DEBUG: Release branch $release_branch already exists, checking it out"
+  git fetch origin
+  git checkout $release_branch || git checkout -b $release_branch origin/$release_branch
+else
+  echo "🔍 DEBUG: Creating new release branch $release_branch"
+  git checkout -b $release_branch
+fi
+
+# Commit changes if any
+echo "🔍 DEBUG: Adding and committing changes"
+git add -A
+if [[ "$DEBUG_MODE" == "true" ]]; then
+  git commit -m "Prepare release v${VERSION} (debug mode)" || echo "🔍 DEBUG: No changes to commit"
+else
+  git commit -m "Prepare release v${VERSION}" || echo "🔍 DEBUG: No changes to commit"
+fi
+
+# Push branch with enhanced error handling
+echo "🔍 DEBUG: Attempting to push branch to origin..."
+echo "🔍 DEBUG: Branch name: $release_branch"
+echo "🔍 DEBUG: Repository: $GITHUB_REPOSITORY"
+echo "🔍 DEBUG: Current git status:"
+git status
+
+# Verify GitHub access before pushing
+echo "🔍 DEBUG: Verifying GitHub API access..."
+gh_status=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user)
+if [[ "$gh_status" != "200" ]]; then
+  echo "⚠️ GitHub API access failed with status code: $gh_status"
+  echo "🔍 DEBUG: GitHub token may be invalid or expired"
+  exit 1
+fi
+echo "🔍 DEBUG: GitHub API access verified (status code: $gh_status)"
+
+# List remotes for debugging
+echo "🔍 DEBUG: Configured remotes:"
+git remote -v
+
+# Attempt push with verbose output and error capture
+echo "🔍 DEBUG: Beginning push operation with verbose output..."
+if ! git push -v --set-upstream origin $release_branch 2>&1; then
+  echo "⚠️ Push failed with error"
+  echo "🔍 DEBUG: Checking if there are network issues..."
+  ping -c 3 github.com || echo "⚠️ Network connectivity to GitHub may be an issue"
+  
+  echo "🔍 DEBUG: Attempting push with force option as fallback..."
+  if ! git push -v --force-with-lease --set-upstream origin $release_branch 2>&1; then
+    echo "⚠️ Force push also failed, exiting"
+    exit 1
+  else
+    echo "✅ Force push succeeded"
+  fi
+else
+  echo "✅ Branch pushed successfully"
+fi
+
+# Check if PR already exists
+echo "🔍 DEBUG: Checking if PR already exists"
+PR_EXISTS=$(curl -s -X GET \
+  -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls?head=release/v${VERSION}&base=${RELEASE_BRANCH}&state=open" | jq length)
+
+if [[ "$PR_EXISTS" -gt 0 ]]; then
+  echo "🔍 DEBUG: PR already exists for this release branch, skipping PR creation"
+else
+  # Create PR if it doesn't exist
+  echo "🔍 DEBUG: Creating new PR for release"
+  pr_title="Release v${VERSION}"
+  if [[ "$DEBUG_MODE" == "true" ]]; then
+    pr_title="${pr_title} (MANUAL RELEASE - NO TESTS)"
+  fi
+  
+  # Prepare release notes
+  if [[ -f "release-notes/release-notes.md" ]]; then
+    echo "🔍 DEBUG: Found release notes file"
+    PR_NOTES=$(cat release-notes/release-notes.md)
+  else
+    echo "🔍 DEBUG: No release notes file found, using generic message"
+    PR_NOTES="No release notes available."
+  fi
+  
+  # Escape newlines and quotes for JSON
+  PR_NOTES_ESCAPED=$(echo "$PR_NOTES" | sed ':a;N;$!ba;s/\n/\\n/g' | sed 's/"/\\"/g')
+  
+  # Create PR body
+  pr_body="Release preparation for version ${VERSION}\\n\\n"
+  if [[ "$DEBUG_MODE" == "true" ]]; then
+    pr_body="${pr_body}⚠️ MANUAL RELEASE - TESTING WAS SKIPPED ⚠️\\n"
+    pr_body="${pr_body}This PR was created in debug mode. No automated tests were run.\\n\\n"
+  else
+    pr_body="${pr_body}Generated from release commit.\\n\\n"
+  fi
+  pr_body="${pr_body}${PR_NOTES_ESCAPED}"
+  
+  # Create PR with proper error handling
+  echo "🔍 DEBUG: Sending PR creation request to GitHub API"
+  PR_RESPONSE=$(curl -s -X POST \
+    -H "Authorization: token $GITHUB_TOKEN" \
+    -H "Accept: application/vnd.github.v3+json" \
+    "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls" \
+    -d '{
+      "title": "'"${pr_title}"'",
+      "body": "'"${pr_body}"'",
+      "head": "'"${release_branch}"'",
+      "base": "'"${RELEASE_BRANCH}"'"
+    }')
+  
+  # Check if PR was created successfully
+  PR_URL=$(echo "$PR_RESPONSE" | jq -r .html_url)
+  if [[ "$PR_URL" == "null" ]]; then
+    echo "⚠️ Failed to create PR. GitHub API response:"
+    echo "$PR_RESPONSE" | jq .
+    exit 1
+  else
+    echo "✅ Pull request created successfully: $PR_URL"
+  fi
+fi
+
+echo "✅ Pull request process completed"
+echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"
+$$--GLUE--$$
+.\ci\scripts\actions\deploy-and-test.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀"
+echo "🔍 DEBUG: Starting deployment test to environment $DEPLOY_ENV"
+sudo mkdir -p $CI_ROOT/ci/
+sudo chmod a+rwx $CI_ROOT/ci/
+echo "🔍 DEBUG: Setting up CI scripts and environments"
+cp -r $ACTION_PATH/ci/scripts/* $CI_ROOT/ci/ci/scripts/
+cp -r ./ci/envs/ $CI_ROOT/ci/envs/
+
+echo "🔍 DEBUG: Launching deployment script"
+$ACTION_PATH/ci/scripts/deploy.sh
+echo "✅ Deployment and testing completed successfully"
+echo "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀"
+$$--GLUE--$$
+.\ci\scripts\actions\generate-release-notes.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝"
+echo "🔍 DEBUG: Generating release notes"
+mkdir -p release-notes
+echo "🔍 DEBUG: Running release notes script for version $VERSION"
+$ACTION_PATH/ci/scripts/release-notes.sh \
+  "$VERSION" \
+  "$(pwd)" \
+  "$PREV_TAG" \
+  "release-notes/$RELEASE_NOTES_FILE"
+echo "✅ Release notes generated"
+echo "📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝"
+$$--GLUE--$$
+.\ci\scripts\actions\get-current-version.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"
+echo "🔍 DEBUG: Checking current version from version file"
+if [[ -f version ]]; then
+  version=$(cat version | grep -oP '(?<=Version: ).*' || echo "0.0.0")
+  echo "🔍 DEBUG: Found version: $version"
+  echo "current_version=$version" >> $GITHUB_OUTPUT
+else
+  echo "🔍 DEBUG: No version file found, defaulting to 0.0.0"
+  echo "current_version=0.0.0" >> $GITHUB_OUTPUT
+fi
+echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"
+$$--GLUE--$$
+.\ci\scripts\actions\run-spec-tests.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪"
+echo "🔍 DEBUG: Running spec tests with Ginkgo"
+sudo chmod -R a+rwx ./*
+export PATH=$PATH:~/go/bin
+
+echo "🔍 DEBUG: Changing to spec directory and running tests"
+cd spec
+echo "🔍 DEBUG: Running ginkgo with params: $GINKGO_PARAMS"
+ginkgo $GINKGO_PARAMS .
+echo "✅ Spec tests completed successfully"
+echo "🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪"
+$$--GLUE--$$
+.\ci\scripts\actions\setup-debug-mode.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞"
+echo "🔍 DEBUG: Running in DEBUG MODE - Setting up without tests"
+mkdir -p spec-check
+mkdir -p release-notes
+echo "🔍 DEBUG: Created directories for spec checks and release notes"
+echo "⚠️ Debug mode enabled - skipping tests and proceeding directly to PR creation"
+
+# Create placeholder files for spec checks
+echo "🔍 DEBUG: Creating placeholder files for spec checks"
+echo "SKIPPED IN DEBUG MODE" > spec-check/diff-$(date -u +%Y%m%d%H%M%S)
+
+# Create placeholder for release notes
+echo "🔍 DEBUG: Creating placeholder release notes"
+echo "# Release Notes for $KIT_NAME v$VERSION" > release-notes/release-notes.md
+echo "Generated in debug mode - no automated tests were run." >> release-notes/release-notes.md
+echo "✅ Debug mode setup completed"
+
+# Set breaking changes flag to false in debug mode
+echo "🔍 DEBUG: Setting breaking changes flag to false in debug mode"
+echo "has_breaking_changes=false" >> $GITHUB_OUTPUT
+echo "ℹ️ Breaking changes detection skipped in debug mode"
+echo "🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞🐞"
+$$--GLUE--$$
+.\ci\scripts\actions\setup-go.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪"
+echo "🔍 DEBUG: Setting up Go for spec tests"
+echo "🔍 DEBUG: Using Go version: $GO_VERSION"
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf $GO_VERSION
+echo "🔍 DEBUG: Installing Ginkgo test framework"
+go install github.com/onsi/ginkgo/v2/ginkgo@latest
+export PATH=$PATH:~/go/bin
+echo "✅ Go setup completed"
+go version
+echo "🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪"
+$$--GLUE--$$
+.\ci\scripts\actions\setup-infrastructure.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️" 
+echo "🔍 DEBUG: Setting up infrastructure for $IAAS_PROVIDER"
+# Install infrastructure-specific tools
+
+# TODO: Look back at the concourse pipelienes to see about re-generalizing this
+
+case "$IAAS_PROVIDER" in
+  vsphere)
+    # VSphere specific setup
+    echo "🔍 DEBUG: Setting up VSphere tools..."
+    # Configure VSphere credentials
+    mkdir -p ~/.vsphere
+    echo "$VSPHERE_USERNAME" > ~/.vsphere/username
+    echo "$VSPHERE_PASSWORD" > ~/.vsphere/password
+    echo "✅ VSphere credentials configured"
+    ;;
+  aws)
+    # AWS specific setup
+    echo "🔍 DEBUG: Setting up AWS CLI..."
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+    unzip awscliv2.zip
+    sudo ./aws/install
+    # Configure AWS credentials
+    echo "🔍 DEBUG: Configuring AWS credentials"
+    mkdir -p ~/.aws
+    cat > ~/.aws/credentials << EOF
+[default]
+aws_access_key_id = $AWS_ACCESS_KEY_ID
+aws_secret_access_key = $AWS_SECRET_ACCESS_KEY
+EOF
+    echo "✅ AWS CLI installed and configured"
+    ;;
+  gcp)
+    # GCP specific setup
+    echo "🔍 DEBUG: Setting up GCP CLI..."
+    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+    sudo apt-get update && sudo apt-get install google-cloud-cli
+    # Configure GCP credentials
+    echo "🔍 DEBUG: Configuring GCP service account"
+    echo "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/gcp-key.json
+    gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
+    rm /tmp/gcp-key.json
+    echo "✅ GCP CLI installed and configured"
+    ;;
+esac
+echo "✅ Infrastructure setup completed for $IAAS_PROVIDER"
+echo "🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️🛠️"
+$$--GLUE--$$
+.\ci\scripts\actions\setup-tools.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡"
+echo "🔍 DEBUG: Starting setup process for Genesis Kit Build & Test"
+echo "⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡"
+
+# Install common tools
+echo "🔍 DEBUG: Installing common tools"
+sudo apt-get update
+sudo apt-get install -y build-essential unzip jq
+
+# Echo GitHub Action path
+echo "🔍 DEBUG: GitHub Action path: ${GITHUB_ACTION_PATH}"
+
+echo "🔍 DEBUG: Contents of GitHub Action path:"
+ls -la "${GITHUB_ACTION_PATH}"
+
+echo "🔍 DEBUG: Contents of GitHub Action path ./ci:"
+ls -la "${GITHUB_ACTION_PATH}/ci"
+
+echo "🔍 DEBUG: Contents of GitHub Action path ./ci/scripts:"
+ls -la ${GITHUB_ACTION_PATH}/ci/scripts
+
+# Install Genesis dependencies
+echo "🔍 DEBUG: Updating permissions for scripts"
+sudo chmod -R a+rwx "${GITHUB_ACTION_PATH}/ci/scripts"
+echo "✅ Permissions updated for scripts"
+
+echo "🔍 DEBUG: Installing Genesis and dependencies"
+"${GITHUB_ACTION_PATH}/ci/scripts/ensure-tools.sh"
+echo "✅ Genesis and deps installed successfully"
+echo "⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡"
+$$--GLUE--$$
+.\ci\scripts\actions\setup-vault.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+echo "🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐"
+echo "🔍 DEBUG: Setting up Vault"
+sudo chmod -R a+rwx ./*
+$ACTION_PATH/ci/scripts/init-vault.sh
+echo "✅ Vault setup completed"
+echo "🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐🔐"
+$$--GLUE--$$
+.\ci\scripts\build-kit.sh
+$$--GLUE--$$
+#!/bin/bash
+set -eu
+
+# Resource Directories
+export REPO_ROOT="git"
+export BUILD_ROOT="build"
+export CI_ROOT="git-ci"
+export VERSION_FROM="version/number"
+
+header() {
+	echo
+	echo "================================================================================"
+	echo "$1"
+	echo "--------------------------------------------------------------------------------"
+	echo
+}
+
+bail() {
+	echo >&2 "$*  Did you misconfigure Concourse?"
+	exit 2
+}
+test -n "${KIT_SHORTNAME:-}"  || bail "KIT_SHORTNAME must be set to the short name of this kit."
+test -n "${VAULT_URI:-}"      || bail "VAULT_URI must be set to an address for connecting to Vault."
+test -n "${VAULT_TOKEN:-}"    || bail "VAULT_TOKEN must be set to something; it will be used for connecting to Vault."
+
+test -f "${VERSION_FROM}"     || bail "Version file (${VERSION_FROM}) not found."
+VERSION=$(cat "${VERSION_FROM}")
+test -n "${VERSION}"          || bail "Version file (${VERSION_FROM}) was empty."
+
+header "Connecting to vault..."
+safe target da-vault "$VAULT_URI" -k
+echo "$VAULT_TOKEN" | safe auth token
+safe read secret/handshake
+
+check_dirs=()
+for dir in overlay manifests spec/results; do
+  [[ -d "$REPO_ROOT/$dir" ]] && check_dirs+=( "$REPO_ROOT/$dir/" )
+done
+if [[ ${#check_dirs[@]} -gt 0 ]] ; then
+  header "Checking SHA1s of specified components (not including bosh-deployment) ..."
+  out="$(eval "spruce merge --skip-eval $( \
+    grep -rl '^releases:' "${check_dirs[@]}" \
+    | sed -e "s/\\(.*\\)/<(spruce json \\1 | jq -r '{releases: [ \"(( merge on sha1 ))\", .releases[] ]}')/" |tr "\n" " " \
+  ) | spruce json | jq -r ." )"
+  echo "$out" | spruce merge | spruce json | "${CI_ROOT}/ci/scripts/check-sha1s"
+fi
+
+header "Building $KIT_SHORTNAME kit v$VERSION"
+genesis -C "$REPO_ROOT" compile-kit -v "$VERSION" -n "$KIT_SHORTNAME"
+
+mv "${REPO_ROOT}/${KIT_SHORTNAME}-${VERSION}.tar.gz" "$BUILD_ROOT/"
+
+echo
+echo "================================================================================"
+echo "SUCCESS!"
+exit 0
+
+$$--GLUE--$$
+.\ci\scripts\build-upstream-jobs.sh
+$$--GLUE--$$
+#!/bin/bash -
+set -ue
+base_dir="$(cd "$(dirname "$0")/.." && pwd)"
+mkdir -p "${base_dir}/pipeline/upstream/"
+
+_lookup() {
+ echo "${1}" | base64 --decode | jq -r "${2}"
+}
+
+# Read upstream.yml
+update_group=()
+upstream_details="$(spruce json "${base_dir}/settings.yml" | jq -r '.meta.upstream.bosh_releases//[] | .[] | @base64')"
+
+# For each release in upstream.yml,
+for release in $upstream_details ; do
+  name="$(_lookup "$release" .name)"
+  type="$(_lookup "$release" '.type//"bosh-io-release"')"
+  path="$(_lookup "$release" '.path//"manifests/releases/'"$name"'.yml"')"
+  repo="$(_lookup "$release" '.repository')"
+  if [[ $type == 'bosh-io-release' ]] ; then
+    source=$'\n'"      repository: $repo";
+  elif [[ $type == 'github-release' ]] ; then
+    owner="$(_lookup "$release" '.owner//""')"
+    if [[ -z "$owner" && "$repo" =~ / ]] ; then
+      owner="${repo%%/*}"
+      repo="${repo#*/}"
+    fi
+    source=$'\n'"      repository: $repo"$'\n'"      owner: $owner";
+
+    token="$(_lookup "$release" '.access_token//""')"
+    if [[ -n "$token" ]] ; then
+      source="$source"$'\n      access_token: "'"$token"'"'
+    fi
+  else
+    echo >&2 "Unknown resource type for $name upstream release: $type"
+    echo >&2 "Expecting one of: bosh-io-release, github-release"
+    echo >&2 "Update upstream.bosh-releases configuration in ci/settings.yml"
+    exit 1
+  fi
+  job="update-${name}-release"
+  release="${name}-release"
+
+  update_group+=( "$job" )
+
+  cat <<EOF >> "$base_dir/pipeline/upstream/update_${name}_release.yml"
+jobs:
+- (( append ))
+- name: $job
+  public: false
+  serial: true
+  serial_groups: [upstream-releases]
+  plan:
+  - do:
+    - in_parallel:
+      - { get: git,    trigger: false, passed: [spec-tests] }
+      - { get: git-ci, trigger: false  }
+      - get: $release
+        trigger: true
+        params:
+          tarball: false
+    - task: $job
+      file: git-ci/ci/tasks/update-release.yml
+      input_mapping: {bosh-release: $release}
+      params:
+        RELEASE_NAME:  $name
+        RELEASE_PATH:  $path
+        BRANCH:        (( grab meta.github.branch ))
+        GIT_EMAIL:     (( grab meta.git.email ))
+        GIT_NAME:      (( grab meta.git.name ))
+    - put: git
+      params:
+        merge: true
+        repository: git
+
+resources:
+  - (( append ))
+  - name: $release
+    type: $type
+    check_every: 24h
+    source: $source
+EOF
+
+done
+group_file="$base_dir/pipeline/upstream/update_group.yml"
+if [[ "${#update_group[@]}" -gt 0 ]] ; then
+  (
+  echo "groups:"
+  echo "- (( merge on name ))"
+  echo "- name: upstream"
+  echo "  jobs:"
+  echo "  - (( append ))"
+  for job in ${update_group[@]+"${update_group[@]}"} ; do
+    echo "  - $job"
+  done
+  ) >> "$group_file"
+elif [[ -f "$group_file" ]] ; then
+  rm -f "$group_file"
+fi
+
+$$--GLUE--$$
+.\ci\scripts\check-sha1s.sh
+$$--GLUE--$$
+#!/usr/bin/perl
+use strict;
+use warnings;
+use JSON::PP qw/decode_json/;
+
+my $rc = 0;
+my $data = decode_json(do { local $/; <> });
+for my $r (@{$data->{releases} || []}) {
+	chomp(my $sha1 = `curl -Lsk "$r->{url}" | sha1sum`);
+	$sha1 =~ s/ .*//;
+
+	if ($r->{sha1} eq $sha1) {
+		print "[ok] $r->{name} sha1 checkums are correct.\n";
+	} else {
+		print "[!!] $r->{name} sha1 checkums are INCORRECT.\n";
+		print "[!!]     the kit has '$r->{sha1}' (wrong)\n";
+		print "[!!]    actually got '$sha1' (correct)\n";
+		$rc = 1;
+	}
+}
+exit $rc;
+
+$$--GLUE--$$
+.\ci\scripts\compare-release-specs.sh
+$$--GLUE--$$
+#!/bin/bash
+set -ue
+
+# What branch is the comparison of the current working branch being compared against
+compare_branch="${1:-origin/}"
+check_dirs="spec/results manifests"
+
+orig_dir="$(pwd)"
+# needed because of when running locally or in ci
+ci_dir="../$(basename "$(pwd)")-ci"
+if [[ -d "$ci_dir" ]]; then
+  ci_dir="$(cd "$ci_dir" && pwd)"
+else
+  ci_dir="$orig_dir"
+fi
+
+release_files() {
+  for d in $check_dirs; do
+    grep -rl '^releases' "$d" 2>/dev/null || true
+  done
+}
+
+releases() {
+  eval "spruce merge --skip-eval $( \
+  release_files \
+  | sed -e "s/\\(.*\\)/\<(spruce json \\1 | jq -r '{releases: [ \"(( merge on sha1 ))\", .releases[] ]}')/" |tr "\n" " " \
+  ) | spruce merge | spruce json | jq -r ."
+}
+
+workdir="$(mktemp -d)"
+mkdir "$workdir/compare"
+cp -R "$(pwd)/.git" "$workdir/compare/"
+pushd "$workdir/compare" > /dev/null
+if ! git show -q "$compare_branch" &>/dev/null ; then
+  echo "The latest release ($compare_branch) is NOT an ancestor to this commit."
+  echo "This should never happen -- Cannot continue!"
+ exit 1
+fi
+git checkout -qf --detach "$compare_branch"
+prev_releases="$(releases)"
+popd > /dev/null
+rm -rf "$workdir/compare"
+
+curr_releases="$(releases)"
+
+prev_rel_names="$(echo "$prev_releases"| jq -r '.releases[] | .name' | sort | uniq)"
+curr_rel_names="$(echo "$curr_releases"| jq -r '.releases[] | .name' | sort | uniq)"
+
+removed=()
+while IFS='' read -r rel ; do
+  removed+=( "$rel" )
+done <<<"$(diff -p <(echo "$prev_rel_names") <(echo "$curr_rel_names") | grep '^- ' | sed -e 's/- //')"
+added=()
+while IFS='' read -r rel ; do
+  added+=( "$rel" )
+done <<<"$(diff -p <(echo "$prev_rel_names") <(echo "$curr_rel_names") | grep '^+ ' | sed -e 's/+ //')"
+
+unchanged=()
+changed=()
+while IFS='' read -r rel; do
+  prev_ver="$(echo "$prev_releases" | jq -r --arg r "$rel" \
+    '.releases | map(select(.name == $r) | .version) | sort | unique | if(.|length>0) then .|join(",") else "--none--" end' )"
+  if [[ "$prev_ver" == "--none--" ]] ; then continue ; fi
+  curr_ver="$(echo "$curr_releases" | jq -r --arg r "$rel" \
+    '.releases | map(select(.name == $r) | .version) | sort | unique | join(",")' )"
+  if [[ "$prev_ver" == "$curr_ver" ]] ; then
+    unchanged+=( "$rel $curr_ver" )
+  else
+    changed+=( "$rel $prev_ver $curr_ver" )
+  fi
+done <<< "${curr_rel_names[@]}"
+
+# Write diff outputs
+if [[ "${#removed[@]}" -gt 0 && -n "${removed[0]}" ]] ; then
+  echo "Removed Releases:"
+  for rel in "${removed[@]}" ; do
+    echo "  - $rel"
+  done
+  echo
+fi
+
+if [[ "${#unchanged[@]}" -gt 0 && -n "${unchanged[0]}" ]] ; then
+  echo "Unchanged Releases:"
+  for info in "${unchanged[@]}" ; do
+    read -r rel curr_ver <<<"$info"
+    echo "  - $rel ($curr_ver)"
+  done
+  echo
+fi
+
+if [[ "${#added[@]}" -gt 0 && -n "${added[0]}" ]] ; then
+  echo "Added Releases:"
+  for rel in "${added[@]}" ; do
+    echo "  - $rel"
+  done
+  echo
+fi
+
+if [[ "${#changed[@]}" -gt 0 && -n "${changed[0]}" ]] ; then
+  echo "Changed Releases:"
+  for info in "${changed[@]}" ; do
+    read -r rel prev_ver curr_ver <<<"$info"
+    echo "  - $rel ($prev_ver -> $curr_ver)"
+  done
+  echo
+
+  echo "Fetching spec diffs..."
+  if [ -f "${ci_dir}/ci/upstreamrepo.yml" ]; then
+    upstreamrepo=$(spruce json "${ci_dir}/ci/upstreamrepo.yml")
+  else
+    upstreamrepo='{"repos": []}'
+  fi
+  # TODO: do this in two phases -- first phase pull out all the non-compiled
+  #       versions, then run through with the compiled versions, picking up the
+  #       non-compiled version's git repo.  Also indicate if they are compiled
+  #       or not, and if so, what os is the target. (because that may change)
+  repos="$(
+    echo "$curr_releases" \
+    | jq --argjson gitrepos "$upstreamrepo" -r 'reduce .releases[] as {$name, $url, $sha1, $version} ({repos: []};
+        ($url
+        | if ($url | test("https?://s3(-.*)?.amazonaws.com")) then
+            ($gitrepos.repos | map(select(.name == $name))[0].repo)
+          elif ($url | test("https?://storage.googleapis.com")) then
+            ($gitrepos.repos | map(select(.name == $name))[0].repo)
+          elif ($url | test("https?://bosh.io")) then
+            ($url | sub("^.*/d/";"https://") | sub("\\?v=.*$";""))
+          elif ($url | test("https?://github.com")) then
+            ($url | sub("^.*http";"http") | sub("/releases/download/.*$";""))
+          else
+            $url
+          end
+        ) as $repo |
+        (.repos += [{$name,$repo}])
+    )')"
+
+  for info in "${changed[@]}" ; do
+    read -r rel prev_ver curr_ver <<<"$info"
+
+    #TODO: handle multiple versions (comma separated) -- right now we're just taking the first one with a repo.
+    #TODO: handle compiled releases better -- right now just skipping.
+    repo="$(echo "$repos" | jq -r --arg r "$rel" '.repos | map(select(.name == $r and .repo != null)) | .[0].repo//""' )"
+    [[ -n "$repo" ]] || continue
+    rel_dir="$workdir/releases/$rel"
+    mkdir -p "$rel_dir"
+    git -C "$rel_dir" init >/dev/null 2>&1 && \
+    git -C "$rel_dir" remote add origin -f "$repo" >/dev/null 2>&1 && \
+    git -C "$rel_dir" config core.sparseCheckout true >/dev/null 2>&1
+
+    echo "/jobs" > "$rel_dir/.git/info/sparse-checkout"
+
+    set +e
+    reponame=$(echo "${repo}" | grep github | cut -d "/" -f4-5)
+    set -e
+    if [[ -n ${reponame}  ]]; then
+      cmd=( curl --silent -L -H "Accept: application/vnd.github.v3+json" )
+      [[ -n "$GITHUB_AUTH_TOKEN" ]] && cmd+=( -H "Authorization: token $GITHUB_AUTH_TOKEN" )
+      cmd+=( "https://api.github.com/repos/${reponame}" )
+      branch=$( "${cmd[@]}" | jq -r .default_branch)
+    else
+      branch="master"
+    fi
+
+    git -C "$rel_dir" pull --depth 1 origin ${branch} > /dev/null 2>&1
+
+
+    mkdir -p "$workdir/compare-specs"
+    for v in "$prev_ver" "$curr_ver" ; do
+      set +e
+      git -C "$rel_dir" checkout -f "$v" >/dev/null 2>&1 || git -C "$rel_dir" checkout -f "v$v" >/dev/null 2>&1
+      set -e
+      #shellcheck disable=2181
+      if [[ "$?" == '0' ]] ; then
+        (cd "$rel_dir/jobs"; for x in * ; do
+          [[ -d "$workdir/compare-specs/$x" ]] || mkdir -p "$workdir/compare-specs/$x"
+          [[ -f "$x/spec" ]] && cp "$x/spec" "$workdir/compare-specs/$x/spec-$v"
+        done) > /dev/null 2>&1
+      else
+        echo "[ERROR] Cannot find version $v of release $rel"
+      fi
+    done
+    spec_changed=0
+    pushd "$workdir/compare-specs" >/dev/null
+    for job in * ; do
+      if [[ -f "$job/spec-$prev_ver" && -f "$job/spec-$curr_ver" ]] ; then
+        if ! diff -q "$job/spec-$prev_ver"  "$job/spec-$curr_ver" > /dev/null 2>&1; then
+          echo "[35;1m[$rel/job/$job][31;1m Change detected in spec file between $prev_ver and $curr_ver[0m"
+          spruce diff "$job/spec-$prev_ver" "$job/spec-$curr_ver" || true
+          spec_changed=1
+        fi
+      elif [[ -f "$job/spec-$prev_ver" || -f "$job/spec-$curr_ver" ]] ; then
+        spec_changed=1
+        [[ -f "$job/spec-$prev_ver" ]] || echo "[35;1m[$rel/job/$job][33;1m No spec found in previous version ($prev_ver)[0m"
+        [[ -f "$job/spec-$curr_ver" ]] || echo "[35;1m[$rel/job/$job][33;1m No spec found in current version ($curr_ver)[0m"
+      fi
+    done
+    [[ "$spec_changed" == "0" ]] && echo "[35;1m[$rel][32;1m No changes to spec files between $prev_ver and $curr_ver[0m"
+    popd >/dev/null
+    rm -rf "$workdir/compare-specs"
+    rm -rf "$workdir/releases/$rel"
+    echo
+  done
+else
+  echo "No Spec Changes to Consider"
+  echo
+fi
+[[ -n "$workdir" ]] && rm -rf "$workdir"
+
+$$--GLUE--$$
+.\ci\scripts\deploy.sh
+$$--GLUE--$$
+#!/bin/bash
+set -eu
+
+echo "Retrieving environment variables for deployment..."
+# Load Vault environment variables
+source ./vault-env.tmp
+
+echo "operating in working dir: $(pwd)"
+
+# Echo a version number into /version/number in one is not specified
+# Create version number file if it doesn't exist
+if [[ -z "${VERSION_FROM:-}" ]]; then
+    export VERSION_FROM="./version/number"
+fi
+if [[ ! -f "${VERSION_FROM}" ]]; then
+    mkdir -p "$(dirname "${VERSION_FROM}")"
+    echo "0.0.1" > "${VERSION_FROM}"
+fi
+
+echo "VAULT_TOKEN: ${VAULT_TOKEN:-[not set]}"
+echo "VAULT_URI: ${VAULT_URI:-[not set]}"
+
+# Resource Directories
+export CI_ROOT="git-ci"
+export DEPLOY_ENV="${DEPLOY_ENV:-"ci-baseline"}"
+export KEEP_STATE="${KEEP_STATE:-"false"}"
+export GIT_NAME="${GIT_NAME:-"Genesis CI Bot"}"
+export GIT_EMAIL="${GIT_EMAIL:-"genesis-ci@rubidiumstudios.com"}"
+
+header() {
+  echo
+  echo "================================================================================"
+  echo "$1"
+  echo "--------------------------------------------------------------------------------"
+  echo
+}
+
+bail() {
+  echo >&2 "$*  Did you misconfigure Concourse?"
+  exit 2
+}
+test -n "${KIT_SHORTNAME:-}"      || bail "KIT_SHORTNAME must be set to the short name of this kit."
+test -n "${VAULT_URI:-}"          || bail "VAULT_URI must be set to an address for connecting to Vault."
+test -n "${VAULT_TOKEN:-}"        || bail "VAULT_TOKEN must be set to something; it will be used for connecting to Vault."
+
+[[ -n "${TAG_ROOT:-}" && -n "${BUILD_ROOT:-}" ]] && bail "Cannot specify both 'TAG_ROOT' and 'BUILD_ROOT'"
+
+#  If neither TAG_ROOT nor BUILD_ROOT is set, assume current directory as BUILD_ROOT
+#  NOTE: The tarball of the built kit is expected to be in the current directory if this is to work.
+if [[ -z "${TAG_ROOT:-}" && -z "${BUILD_ROOT:-}" ]]; then
+    echo "WARNING: Neither TAG_ROOT nor BUILD_ROOT was specified. Assuming current directory as BUILD_ROOT."
+    echo "NOTE: The tarball of the built kit is expected to be in the current directory if this is to work."
+    export BUILD_ROOT="$(pwd)"
+fi
+
+WORKDIR="work/${KIT_SHORTNAME}-deployments"
+VERSION=
+KIT=
+if [[ -n "${TAG_ROOT:-}" ]]; then
+  test -f "${TAG_ROOT}/.git/ref"   || bail "Version reference for $TAG_ROOT repo not found."
+  VERSION="$(sed -e 's/^v//' < "${TAG_ROOT}/.git/ref")"
+  re='^[0-9]+\.[0-9]+\.[0-9]+'
+  [[ "${VERSION}" =~ $re ]]        || bail "Version reference for $TAG_ROOT repo was not a semver value."
+  KIT="$KIT_SHORTNAME/$VERSION"
+else
+  test -f "${VERSION_FROM}"        || bail "Version file (${VERSION_FROM}) not found."
+  VERSION=$(cat "${VERSION_FROM}")
+  test -n "${VERSION}"             || bail "Version file (${VERSION_FROM}) was empty."
+  KIT="$(cd "$BUILD_ROOT" && pwd)/${KIT_SHORTNAME}-${VERSION}.tar.gz"
+fi
+header "Setting up git..."
+git config --global user.name  "$GIT_NAME"
+git config --global user.email "$GIT_EMAIL"
+git config --global init.defaultBranch develop
+
+header "Connecting to vault..."
+safe target da-vault "$VAULT_URI" -k
+echo "$VAULT_TOKEN" | safe auth token
+safe read secret/handshake
+
+if [[ "${KEEP_STATE}" == "true" && -d "${WORKDIR}" ]] ; then
+  header "Updating Genesis deployment directory for $KIT_SHORTNAME v$VERSION..."
+  genesis -v
+  if [[ -n "${TAG_ROOT:-}" ]] ; then
+    genesis -C "${WORKDIR}" fetch-kit "${KIT}"
+  else
+    cp -av "$KIT" "${WORKDIR}/.genesis/kits/"
+  fi
+else
+  header "Setting up Genesis deployment directory for $KIT_SHORTNAME v$VERSION..."
+  rm -rf work/*; mkdir -p work/
+  genesis -v
+  genesis -C "$(dirname "$WORKDIR")" init -k "$KIT" --vault da-vault -d "$(basename "$WORKDIR")"
+fi
+
+header "Copying test environment YAMLs from $CI_ROOT/ci/envs..."
+CI_PATH="$(cd "${CI_ROOT}" && pwd)"
+cp -av "$CI_PATH"/ci/envs/*.yml "${WORKDIR}/"
+test -f "${WORKDIR}/${DEPLOY_ENV}.yml" || \
+  bail "Environment $DEPLOY_ENV.yml was not found in the $CI_ROOT ci/envs/ directory"
+
+target="$(cat <<EOF
+---
+kit:
+  name: $KIT_SHORTNAME
+  version: $VERSION
+EOF
+)"
+echo
+echo "Merging kit name and version into ${WORKDIR}/ci.yml: "
+spruce merge --skip-eval "$CI_PATH/ci/envs/ci.yml" <(echo "$target") > "${WORKDIR}/ci.yml"
+cat "${WORKDIR}/ci.yml"
+
+export PATH="$PATH:$CI_PATH/ci/scripts"
+
+echo $'\n'"Handing off to ${CI_PATH}/ci/test-deployment..."
+cd "${WORKDIR}"
+
+echo $(ls -la $CI_PATH)
+echo "$(cat $CI_PATH/ci/envs/ci-vsphere-baseline.yml)"
+echo "$(cat ./ci-vsphere-baseline.yml)"
+
+
+echo $(ls -lah $CI_PATH/ci/scripts/)
+BOSH=bosh "$CI_PATH/ci/scripts/test-deployment.sh"
+
+echo
+echo "SUCCESS"
+exit 0
+
+$$--GLUE--$$
+.\ci\scripts\ensure-tools.sh
+$$--GLUE--$$
+# This script is designed to make sure that all required CLI tools for the pipeline are installed and on the system path
+set -x
+echo "Setting permissions for all files in current directory..."
+sudo chmod -R a+rwx ./*
+
+echo "Downloading required tools..."
+wget -q https://go.dev/dl/go1.23.5.linux-amd64.tar.gz && echo "Downloaded Go."
+wget -q https://github.com/genesis-community/genesis/releases/download/v3.0.13/genesis && echo "Downloaded Genesis."
+wget -q https://github.com/geofffranks/spruce/releases/download/v1.31.1/spruce-linux-amd64 && echo "Downloaded Spruce."
+wget -q https://github.com/egen/safe/releases/download/v1.8.0/safe-linux-amd64 && echo "Downloaded Safe."
+wget -q https://github.com/cloudfoundry/credhub-cli/releases/download/2.9.41/credhub-linux-amd64-2.9.41.tgz && echo "Downloaded Credhub."
+wget -q https://github.com/cloudfoundry/bosh-cli/releases/download/v7.8.6/bosh-cli-7.8.6-linux-amd64 && echo "Downloaded Bosh CLI."
+
+echo "Extracting Credhub CLI..."
+tar -xvf credhub-linux-amd64-2.9.41.tgz
+
+echo "Moving binaries to appropriate locations..."
+sudo mv ./bosh-cli-7.8.6-linux-amd64 /usr/local/bin/bosh && echo "Moved Bosh CLI."
+sudo mv ./credhub /bin/credhub && echo "Moved Credhub."
+sudo mv ./safe-linux-amd64 /bin/safe && echo "Moved Safe."
+sudo mv ./spruce-linux-amd64 /bin/spruce && echo "Moved Spruce."
+sudo mv ./genesis /bin/genesis && echo "Moved Genesis."
+
+echo "Setting executable permissions..."
+chmod u+x "$(dirname "$0")/compare-release-specs.sh"
+chmod u+x /usr/local/bin/bosh
+chmod u+x /bin/credhub
+chmod u+x /bin/safe
+chmod u+x /bin/spruce
+chmod u+x /bin/genesis
+
+echo "Installing Vault (hopefully Hashicorp's servers are feeling cooperative today)..."
+max_attempts=10
+attempt=1
+success=false
+
+while [ $attempt -le $max_attempts ] && [ "$success" = false ]; do
+    echo "Attempt $attempt of $max_attempts to summon Vault from Hashicorp's hopefully-not-napping servers..."
+    
+    # First try the direct binary download approach
+    if wget -q https://releases.hashicorp.com/vault/1.14.0/vault_1.14.0_linux_amd64.zip && \
+       unzip -q vault_1.14.0_linux_amd64.zip && \
+       sudo mv vault /usr/local/bin/ && \
+       sudo chmod +x /usr/local/bin/vault; then
+        echo "Success! Vault binary downloaded and installed directly."
+        success=true
+    # Fall back to apt installation if direct download fails
+    elif wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg --yes && \
+       echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list && \
+       sudo apt update && sudo apt install vault -y; then
+        echo "Success! Vault has graciously decided to join us via apt."
+        success=true
+    else
+        echo "Attempt $attempt failed. Hashicorp seems to be having a coffee break... ☕"
+        sleep 5
+        attempt=$((attempt + 1))
+    fi
+done
+
+if [ "$success" = false ]; then
+    echo "After $max_attempts attempts, Vault is still playing hard to get. Time to panic! 🔥"
+    exit 1
+fi
+
+# Make sure both possible vault locations are executable
+if [ -f /usr/bin/vault ]; then
+    sudo chmod a+x /usr/bin/vault
+fi
+if [ -f /usr/local/bin/vault ]; then
+    sudo chmod a+x /usr/local/bin/vault
+fi
+
+# Use the first vault we find in the PATH
+vault_path=$(which vault)
+chmod a+x "$vault_path" || echo "Warning: Could not set executable permission on $vault_path"
+
+echo "Checking installed binaries..."
+ls -la /usr/bin/
+
+echo "Installed versions:"
+echo "bosh: $(bosh --version)"
+echo "credhub: $(credhub --version)"
+echo "safe: $(safe --version)"
+echo "spruce: $(spruce --version)"
+echo "genesis: $(genesis --version)"
+echo "vault path: $(which vault)"
+echo "vault: $(vault --version)"
+
+$$--GLUE--$$
+.\ci\scripts\generate-release-notes.sh
+$$--GLUE--$$
+#!/usr/bin/env bash
+set -e
+set -o pipefail
+
+export VERSION_FROM="version/number"
+export GIT_NAME="${GIT_NAME:-"Genesis CI Bot"}"
+export GIT_EMAIL="${GIT_EMAIL:-"genesis-ci@rubidiumstudios.com"}"
+
+header() {
+  echo
+  echo "================================================================================"
+  echo "$1"
+  echo "--------------------------------------------------------------------------------"
+  echo
+}
+
+bail() {
+  echo >&2 "$*  Did you misconfigure Concourse?"
+  exit 2
+}
+test -n "${KIT_SHORTNAME:-}"         || bail "KIT_SHORTNAME must be set to the short name of this kit."
+test -n "${RELEASE_NOTES_FILE:-}"    || bail "RELEASE_NOTES_FILE must be set to the filename for the release notes."
+test -n "${RELEASE_NOTES_WEB_URL:-}" || bail "RELEASE_NOTES_WEB_URL must be set to the release notes gist edit URL."
+
+test -f "${VERSION_FROM}"            || bail "Version file (${VERSION_FROM}) not found."
+VERSION=$(cat "${VERSION_FROM}")
+test -n "${VERSION}"                 || bail "Version file (${VERSION_FROM}) was empty."
+
+git-ci/ci/scripts/release-notes "$VERSION" "git" "git-latest-tag" "release-notes/$RELEASE_NOTES_FILE"
+cat "release-notes/$RELEASE_NOTES_FILE"
+
+header "Uploading the release notes"
+
+git config --global user.name  "$GIT_NAME"
+git config --global user.email "$GIT_EMAIL"
+
+git -C release-notes add "$RELEASE_NOTES_FILE"
+git -C release-notes commit -m "Updated release notes for $KIT_SHORTNAME-genesis-kit v$VERSION"
+
+echo $'\n'"The release notes can be edited at ${RELEASE_NOTES_WEB_URL}"
+
+$$--GLUE--$$
+.\ci\scripts\init-vault.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+# Configuration
+VAULT_VERSION="1.15.2"  # Adjust version as needed
+VAULT_PORT=8200
+VAULT_TOKEN="vault-test-token"  # This is for local testing only
+VAULT_DIR="./vault-data"
+GITHUB_SECRETS_FILE="github-secrets.json"  # File containing GitHub secrets
+
+# Colors for output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Function to check if command exists
+check_command() {
+  if ! command -v $1 &> /dev/null; then
+    echo -e "${RED}Error: $1 is required but not installed.${NC}"
+    exit 1
+  fi
+}
+
+# Function to display status
+status() {
+  echo -e "${BLUE}==>${NC} $1"
+}
+
+# Check for required commands
+check_command curl
+check_command jq
+
+# Create directory for Vault data
+status "Creating Vault data directory"
+mkdir -p ${VAULT_DIR}
+
+# Download Vault if not already installed
+if ! command -v vault &> /dev/null; then
+  status "Downloading Vault ${VAULT_VERSION}"
+  
+  OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+  ARCH=$(uname -m)
+  if [ "$ARCH" = "x86_64" ]; then
+    ARCH="amd64"
+  elif [[ "$ARCH" == arm* ]] || [[ "$ARCH" = "aarch64" ]]; then
+    ARCH="arm64"
+  fi
+  
+  DOWNLOAD_URL="https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_${OS}_${ARCH}.zip"
+  
+  curl -s -o vault.zip ${DOWNLOAD_URL}
+  unzip -o vault.zip
+  chmod +x vault
+  
+  # Move to a location in PATH or use locally
+  if [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
+    mv vault /usr/local/bin/
+  else
+    status "Vault binary downloaded to current directory. Using local path."
+    export PATH=$PATH:$(pwd)
+  fi
+fi
+
+# Start Vault in development mode as a background process
+status "Starting Vault in development mode"
+nohup vault server -dev -dev-root-token-id=${VAULT_TOKEN} -dev-listen-address=0.0.0.0:${VAULT_PORT} > ${VAULT_DIR}/vault.log 2>&1 &
+VAULT_PID=$!
+
+# Save PID to file for later cleanup
+echo $VAULT_PID > ${VAULT_DIR}/vault.pid
+status "Vault process started with PID: $VAULT_PID"
+
+# Wait for Vault to start
+status "Waiting for Vault to start"
+MAX_ATTEMPTS=30
+ATTEMPTS=0
+while ! curl -s http://127.0.0.1:${VAULT_PORT}/v1/sys/health >/dev/null; do
+  ATTEMPTS=$((ATTEMPTS+1))
+  if [ $ATTEMPTS -ge $MAX_ATTEMPTS ]; then
+    echo -e "${RED}Error: Vault failed to start after $MAX_ATTEMPTS attempts.${NC}"
+    kill $VAULT_PID 2>/dev/null || true
+    exit 1
+  fi
+  echo -n "."
+  sleep 1
+done
+echo ""
+
+# Configure environment for vault CLI
+export VAULT_ADDR=http://127.0.0.1:${VAULT_PORT}
+export VAULT_TOKEN=${VAULT_TOKEN}
+
+status "Vault is running at http://127.0.0.1:${VAULT_PORT}"
+
+# Setup some initial configuration - enable KV secrets engine at secret/ path
+status "Enabling KV secrets engine at secret/ path"
+vault secrets enable -version=2 -path=secret kv || echo "KV secrets engine already enabled at secret/ path"
+
+# Create a policy for your application
+status "Creating app policy"
+cat > ${VAULT_DIR}/app-policy.hcl <<EOF
+path "secret/data/github/*" {
+  capabilities = ["read"]
+}
+EOF
+
+vault policy write app-policy ${VAULT_DIR}/app-policy.hcl
+
+# Create the handshake secret
+status "Creating handshake secret"
+vault kv put secret/handshake value="initialized"
+
+# Process and load GitHub secrets
+if [ -f "${GITHUB_SECRETS_FILE}" ]; then
+  status "Loading GitHub secrets from ${GITHUB_SECRETS_FILE}"
+  
+  # Process each secret in the JSON file
+  jq -c '.[]' ${GITHUB_SECRETS_FILE} | while read -r secret; do
+    name=$(echo $secret | jq -r '.name')
+    value=$(echo $secret | jq -r '.value')
+    
+    # Store secret in Vault
+    vault kv put secret/github/${name} value="${value}"
+    echo "Secret ${name} loaded into Vault"
+  done
+else
+  # If no secrets file exists, we'll load from environment variables
+  status "No GitHub secrets file found, attempting to load from environment variables"
+  
+  # Find all environment variables that start with GITHUB_
+  env | grep "^GITHUB_" | while read -r secret; do
+    name=${secret%%=*}
+    value=${secret#*=}
+    
+    # Store secret in Vault
+    vault kv put secret/github/${name} value="${value}"
+    echo "Secret ${name} loaded into Vault from environment"
+  done
+fi
+
+# Create a helper to load secrets in your CI pipeline
+status "Creating helper script for CI pipeline"
+cat > load-vault-secrets.sh <<EOF
+#!/bin/bash
+# This script exports Vault secrets as environment variables for your CI pipeline
+
+export VAULT_ADDR=http://127.0.0.1:${VAULT_PORT}
+export VAULT_TOKEN=${VAULT_TOKEN}
+
+# List all secrets in the GitHub path
+SECRETS=\$(vault kv list -format=json secret/github/ | jq -r '.[]')
+
+for SECRET in \$SECRETS; do
+  # Get the secret value
+  VALUE=\$(vault kv get -field=value secret/github/\$SECRET)
+  
+  # Export as environment variable
+  export \$SECRET="\$VALUE"
+  echo "Exported \$SECRET to environment"
+done
+EOF
+
+chmod +x load-vault-secrets.sh
+
+# Create cleanup script
+status "Creating cleanup script for Vault"
+cat > cleanup-vault.sh <<EOF
+#!/bin/bash
+# This script stops the Vault server
+
+if [ -f "${VAULT_DIR}/vault.pid" ]; then
+  VAULT_PID=\$(cat ${VAULT_DIR}/vault.pid)
+  if ps -p \$VAULT_PID > /dev/null; then
+    echo "Stopping Vault server (PID: \$VAULT_PID)"
+    kill \$VAULT_PID
+  else
+    echo "Vault server is not running"
+  fi
+  rm -f ${VAULT_DIR}/vault.pid
+else
+  echo "No Vault PID file found"
+fi
+EOF
+
+chmod +x cleanup-vault.sh
+
+# Optional: Create a script to help format GitHub secrets for import
+status "Creating helper script for GitHub secrets formatting"
+cat > format-github-secrets.sh <<EOF
+#!/bin/bash
+# This script formats GitHub secrets for import into Vault
+# Usage: ./format-github-secrets.sh SECRET_NAME1=value1 SECRET_NAME2=value2
+
+output="["
+
+first=true
+for secret in "\$@"; do
+  name=\${secret%%=*}
+  value=\${secret#*=}
+  
+  if [ "\$first" = true ]; then
+    first=false
+  else
+    output="\$output,"
+  fi
+  
+  output="\$output{\"name\":\"\$name\",\"value\":\"\$value\"}"
+done
+
+output="\$output]"
+
+echo \$output > ${GITHUB_SECRETS_FILE}
+echo "Generated ${GITHUB_SECRETS_FILE} with \$# secrets"
+EOF
+
+chmod +x format-github-secrets.sh
+
+# Display usage information
+echo -e "\n${GREEN}Local Vault successfully deployed in background!${NC}"
+echo -e "Vault UI: http://127.0.0.1:${VAULT_PORT}/ui"
+echo -e "Vault Token: ${VAULT_TOKEN}"
+echo ""
+echo "To use Vault in your tests:"
+echo "1. Source the environment: export VAULT_ADDR=http://127.0.0.1:${VAULT_PORT} VAULT_TOKEN=${VAULT_TOKEN}"
+echo "2. Run './load-vault-secrets.sh' to load secrets as environment variables"
+echo ""
+echo "To stop Vault when done: ./cleanup-vault.sh"
+
+# Export variables to GitHub Actions environment
+echo "VAULT_URI=http://127.0.0.1:${VAULT_PORT}" > vault-env.tmp
+echo "VAULT_TOKEN=${VAULT_TOKEN}" >> vault-env.tmp
+
+# Export environment variables for the current GitHub Action workflow
+echo "VAULT_ADDR=http://127.0.0.1:${VAULT_PORT}" >> $GITHUB_ENV
+echo "VAULT_TOKEN=${VAULT_TOKEN}" >> $GITHUB_ENV
+
+# Script ends here, with Vault running in the background
+
+$$--GLUE--$$
+.\ci\scripts\release-notes.sh
+$$--GLUE--$$
+#!/usr/bin/env perl
+use warnings;
+use strict;
+use YAML qw(Load LoadFile);
+use JSON::PP qw(decode_json);
+use File::Find;
+use FindBin;
+
+sub header {
+	print  STDERR  "\n================================================================================\n";
+	printf STDERR  "%s", join(' ',@_);
+	print  STDERR  "\n--------------------------------------------------------------------------------\n\n";
+}
+
+sub bail {
+	print STDERR "\n";
+	printf STDERR @_;
+	print STDERR "\nDid you misconfigure Concourse?\n\n";
+	exit 2;
+}
+
+sub uniq {
+	my %items;
+	$items{$_} = 1 for (@_);
+	sort keys %items;
+}
+
+sub get_new_commits {
+	my ($path, $since_commit) = @_;
+	my %lookup = (
+		author => '%aN',
+		author_email => '%aE',
+		author_date => '%at',
+		author_since => '%ar',
+		committer => '%cN',
+		committer_email => '%cE',
+		commit_date => '%ct',
+		commit_since => '%cr',
+		body => '%b'
+	);
+	my @commits = map {
+		my ($c,@s) = split(' ');
+		{commit => $c, subject => join(' ', @s)}
+	} qx(git -C "$path" log --reverse $since_commit...HEAD --pretty=format:'%H %s');
+
+	print STDERR "  - fetching commit details";
+	for my $commit (@commits) {
+		print STDERR '.';
+		for my $detail (keys %lookup) {
+			$commit->{$detail} = join("", qx(git -C "$path" log -n1 --pretty=format:'$lookup{$detail}' $commit->{commit}));
+			chomp $commit->{$detail};
+		}
+	}
+	print STDERR "\n";
+	return @commits;
+}
+
+sub get_latest_commit_ref {
+	my ($path) = @_;
+	chomp(my $ref = qx(git -C $path rev-parse HEAD));
+	$ref
+}
+
+sub get_latest_commit_tag {
+	my ($path) = @_;
+	my $tag;
+	if (-f "$path/.git/ref") {
+		$tag = qx(cat "$path/.git/ref");
+	} else {
+		$tag = qx(git -C $path describe --tag --abbrev=0);
+	}
+	chomp $tag;
+	return $tag
+}
+
+sub parse_commits {
+	my ($path, $last_release_path) = @_;
+	my @commits = get_new_commits($path, get_latest_commit_ref($last_release_path));
+
+	# Remove all merges with no bodies
+	@commits = grep {$_->{body} || $_->{subject} !~ /^Merge .* into .*/} @commits;
+
+	my $last_update;
+  my $updates=0;
+	unless ($ENV{NO_UPSTREAM_SYNC}) {
+		print STDERR "  - determining upstream synchronization\n";
+		@commits = grep {
+			if ($_->{subject} =~ /^Release ([^\/]*)\/([^ ]*) updated to version (.*)$/) {
+				$last_update = $_; $updates++; 0;
+			} else {
+				1;
+			}
+		} @commits;
+	}
+
+	my %messages;
+	if ($last_update) {
+		$last_update->{subject} =~ /^Release ([^\/]*)\/([^ ]*) updated to version (.*)$/;
+		$messages{'Upstream Convergence'} = [
+			sprintf(
+				'* Synchronized embedded %s to [@%s](https://github.com/%s/%s/tree/%s)',
+				$2, $3, $1, $2, $3
+			)
+		];
+	}
+	print STDERR "  - parsing commits for release notes.";
+	my $re=qr/(?:(?:\A|\n\n)\[([^\]\n]*)\]\n\n)/;
+	my ($header,$note,@data);
+	for my $commit (@commits) {
+		$commit->{body} =~ s/\r//g; # Remove windows CR characters
+		(undef, @data) = split($re, $commit->{body}||'');
+		print STDERR (@data ? "!" : ".");
+		while (@data) {
+			$commit->{used} = 1;
+			($header, $note, @data) = @data;
+			# Notes can be stopped with a --- on a new line
+			($note) = split("\n+---",$note);
+			if ($note !~ /\* /) {
+				# Auto-bullet
+				$note = "* ".join("\n  ",split("\n", $note));
+			}
+			$messages{$header} ||= [];
+			push @{$messages{$header}}, $note
+		}
+	}
+	print STDERR "\n";
+	my @entries;
+	push(@entries, "# $_\n\n".join("\n\n",@{$messages{$_}})) for (sort keys %messages);
+	my $release_notes = join("\n\n", @entries);
+	return ($release_notes, \@commits); # TBD: Maybe filter out commits that contained release notes
+}
+
+sub get_releases {
+	my ($path) = @_;
+	my $filter = "$path/spec/results/*.yml";
+	my @entries = qx(for x in $filter ; do spruce json \$x | jq -r '.releases[] | "\\(.name) \\(.version) \\(.url)"' 2>/dev/null ; done | sort | uniq);
+	my %releases;
+	for my $entry (@entries) {
+		my ($release, $version, $url) = split(' ',$entry);
+		push( @{$releases{$release}{$version} ||= []}, $url);
+	}
+	return \%releases;
+}
+
+my @months = qw(ignored January February March April May June July August September October November December);
+sub github {
+	my ($org, $repo, $versions, $type, $orig_url) = @_;
+	my ($url, $day, $mon, $year, $out, $tag);
+
+	unless ($org && $repo) {
+		if ($orig_url =~ m|https://bosh.io/d/github.com/([^/]*)/([^/]*)\?v=(.*)$|) {
+			$org = $1;
+			$repo = $2;
+		} elsif ($orig_url =~ m|https://github.com/([^/]*)/([^/]*)/releases|) {
+			$org = $1;
+			$repo = $2;
+		}
+		return ("-","") unless ($org && $repo);
+	}
+
+	# Try release - the preferred method
+	my $lookup_url="https://api.github.com/repos/$org/$repo/releases";
+	for (@$versions) {
+		$tag = $_;
+		$out = qx(curl -Ls -u "$ENV{GITHUB_ACCESS_TOKEN}:" "$lookup_url" | jq -r --arg t "$tag" '.[] | select(.tag_name == \$t)');
+		last if $out;
+	}
+	if ($out) {
+		printf STDERR "    - $org/$repo release $tag\n";
+		my $data = decode_json($out);
+		$url = $data->{html_url} || '';
+		return ('-', $url) unless $data->{published_at};
+		($year, $mon, $day) = ($data->{published_at} =~ m/^(\d{4})-(\d{2})-(\d{2})/);
+	} else {
+		# Next try tag
+		my $lookup_url="https://api.github.com/repos/$org/$repo/tags";
+		$out = qx(curl -Ls -u "$ENV{GITHUB_ACCESS_TOKEN}:" "$lookup_url");
+		my $target_tag;
+		if ($out) {
+			my $tags = decode_json($out);
+			for (@$versions) {
+				$tag = $_;
+				$target_tag = (grep {$_->{name} eq $tag} @$tags)[0];
+				last if $target_tag;
+			}
+		}
+		if ($target_tag) {
+			printf STDERR "    - $org/$repo tag $tag\n";
+			my $commit_url = $target_tag->{commit}{url};
+			$out = qx(curl -Ls -u "$ENV{GITHUB_ACCESS_TOKEN}:" "$commit_url");
+			my $data = decode_json($out);
+			($url = $data->{html_url}) =~ s#/commit/#/tree/#;
+			($year, $mon, $day) = ($data->{commit}{author}{date} =~ m/^(\d{4})-(\d{2})-(\d{2})/);
+
+		} else {
+			printf STDERR "    - $org/$repo version $tag not found!\n";
+			return ('-','');
+		}
+	}
+	return ("$day $months[$mon] $year", $url);
+}
+
+sub calculate_software_updates {
+	my ($path, $last_path) = @_;
+	printf STDERR "  - retrieving current releases found by spec tests...\n";
+	my $release_candidate_releases = get_releases($path);
+
+	printf STDERR "  - retrieving previous releases found by spec tests...\n";
+	my $last_release_releases = get_releases($last_path);
+
+	printf STDERR "  - checking ci/upstream.yml for more details...\n";
+	my $upstream = LoadFile($FindBin::Bin."/../upstream.yml");
+	my $sections = $upstream->{sections} || [];
+	my $default_section = (map {$_->{name}} grep {$_->{default}} @$sections)[0] || '-';
+	delete $upstream->{sections};
+
+	my %found;
+	print STDERR "  - retrieving release details:\n";
+	for my $name (uniq(keys %$release_candidate_releases, keys %$last_release_releases)) {
+
+		my @new_versions = keys %{$release_candidate_releases->{$name}||{}};
+		my @old_versions = keys %{$last_release_releases->{$name}||{}};
+
+		#There should never be more than one version in a release
+		# bail(
+		# 	"Somehow there are multiple versions of %s (%s) in release candidate",
+		# 	$name, join(', ',@new_versions)
+		# ) if (@new_versions > 1);
+		# bail(
+		# 	"Somehow there are multiple versions of %s (%s) in last release (%s)",
+		# 	$name, join(', ',@old_versions), get_latest_commit_tag($last_path)
+		# ) if (@old_versions > 1);
+		
+		next unless scalar(@new_versions);
+		for my $version (@new_versions) {
+
+			my $section = (grep {defined($upstream->{$_}{$name})} keys(%$upstream))[0] || $default_section;
+			for my $url (@{$release_candidate_releases->{$name}{$version} || []}) {
+				my ($type,$target);
+				if ($url =~ /$name-$version-([^-]*(?:-[^0-9][^-]*)*)-(\d*(?:\.\d*)*)-/) {
+					$type = 'compiled';
+					$target = "$1\@$2";
+				} else {
+					$type = 'source';
+				}
+				my @prefixes = defined($upstream->{$section}{$name}{tag_prefix}) ? ($upstream->{$section}{$name}{tag_prefix}) : ('v','');
+				my @suffixes = ($version =~ /^\d+$/) ? ('','.0','.0.0') : ('');
+
+				$found{$section} ||= {};
+				unless (defined($found{$section}{"$name/$version"})) {
+					my ($date,$release_url) = github(
+						$upstream->{$section}{$name}{org},
+						$upstream->{$section}{$name}{repo},
+						[map {my $p = $_; map {$p.$version.$_} @suffixes} @prefixes],
+						$upstream->{$section}{$name}{type},
+						$url
+					);
+					$found{$section}{"$name/$version"} = {
+						name => $name,
+						version => $version,
+						url => $release_url,
+						date => $date,
+						form => [],
+						label => $upstream->{$section}{$name}{label},
+						changed => (! scalar(@old_versions)) ? "NEW" :
+						           scalar(grep {$version eq $_} @old_versions) ? '' :
+						           sprintf('[X](## "was %s")', join(', ',@old_versions))
+					};
+				}
+				push(@{$found{$section}{"$name/$version"}{form}}, "compiled: $target") if $type eq 'compiled';
+				push(@{$found{$section}{"$name/$version"}{form}}, "source") if $type eq 'source';
+			}
+		}
+	}
+
+	push(@$sections, {name => '-', label => "Other Components"}) if (defined($found{'-'}));
+
+	my $software_notes = "# Software Components\n";
+	for (@$sections) {
+		my $s = $_->{name};
+		my $l = $_->{label} || uc($s)." Components";
+		$software_notes .=
+			"\n## $l\n\n".
+			"| Release | Version | Release Date | Type | Changed |\n".
+			"| ------- | ------- | ------------ | ---- | :-----: |\n";
+		for my $r (sort keys %{$found{$s}}) {
+			my $c = $found{$s}{$r};
+			$c->{label} ||= $c->{name};
+			$software_notes .= sprintf("| %s | %s | %s | %s | %s |\n",
+				$c->{label},
+				$c->{url} ? sprintf("[%s](%s)", $c->{version}, $c->{url}) : $c->{version},
+				$c->{date},
+				join("<br>", sort @{$c->{form}}),
+				$c->{changed}
+			);
+		}
+	}
+
+	return $software_notes;
+}
+
+sub build_commit_summaries {
+	my ($commits,$last_release, $url) = @_;
+	my $summary =
+		"---8<--- This line and everything below will be ignored ---8<---\n\n".
+		"### Raw commit messages since $last_release (oldest to latest)\n";
+
+	for (@$commits) {
+		$summary .= sprintf(
+			"\n\n\n----\n#### %s\n> *[%s](%s)*\n> *authored %s by %s (<%s>)*\n",
+			$_->{subject}, $_->{commit}, "$url/commit/$_->{commit}",
+			$_->{author_since}, $_->{author}, $_->{author_email}
+		);
+		$summary .= sprintf(
+			"> *committed %s by %s (<%s>)*\n",
+			$_->{commit_since}, $_->{committer}, $_->{committer_email}
+		) if $_->{author} ne $_->{committer};
+		$summary .= sprintf("\n```markdown\n%s\n```\n", $_->{body}) if $_->{body};
+	}
+
+	return $summary;
+}
+
+# ------------------------------------------------------------------------------
+# MAIN
+# ------------------------------------------------------------------------------
+my ($version, $rc_path, $last_release_path, $notes_path)=@ARGV;
+
+# Required Environment Variables
+my @missing = grep {! defined($ENV{$_->[0]})} (
+	['GITHUB_ACCESS_TOKEN',    'Access token needed to retrieve information about releases on Github'],
+);
+bail "[ERROR] Missing the following required environment variables:\n%s", join("", map {sprintf "- %s: %s\n", @{$_}} @missing)
+	if (@missing);
+
+my $last_release = get_latest_commit_tag($last_release_path);
+
+header "Building Release Notes from commit messages since $last_release";
+my ($release_notes,$commits) = parse_commits($rc_path, $last_release_path);
+
+my $software_updates;
+unless ($ENV{NO_RELEASE_VERSIONS}) {
+	header "Calculating Release Changes since $last_release";
+	$software_updates = calculate_software_updates($rc_path,$last_release_path);
+}
+
+qx(git -C $rc_path remote get-url origin) =~ /git\@github.com:(.*)$/;
+my $commit_summaries = build_commit_summaries($commits, $last_release, "https://github.com/$1");
+
+open(NOTES, '>', "$notes_path")
+	or bail "Cannot open $notes_path for writing.";
+
+printf NOTES "<!--- Release Notes for v%s -- Do not move --->\n%s\n\n%s\n%s",
+  $version, $release_notes, $software_updates, $commit_summaries;
+close NOTES;
+
+exit 0;
+
+$$--GLUE--$$
+.\ci\scripts\release.sh
+$$--GLUE--$$
+#!/bin/bash
+#
+# ci/scripts/shipit
+#
+# Script for generating Github release / tag assets
+# and managing release notes for a BOSH Release pipeline
+#
+# author:  James Hunt <james@niftylogic.com>
+# created: 2016-03-30
+# shellcheck disable=2291
+
+set -eu
+
+header() {
+	echo
+	echo "================================================================================"
+	echo "$1"
+	echo "--------------------------------------------------------------------------------"
+	echo
+}
+
+bail() {
+	echo >&2 "$*  Did you misconfigure Concourse?"
+	exit 2
+}
+export REPO_ROOT="git"
+export BUILD_ROOT="build"
+export RELEASE_NOTES_ROOT="release-notes"
+export VERSION_FROM="version/number"
+[[ "${PRERELEASE:-0}" =~ (0|f|false|n|no) ]] && PRERELEASE=""
+
+
+test -f "${VERSION_FROM}"     || bail "Version file (${VERSION_FROM}) not found."
+VERSION=$(cat ${VERSION_FROM})
+test -n "${VERSION}"          || bail "Version file (${VERSION_FROM}) was empty."
+
+test -n "${DEVELOP_BRANCH:-}" || bail "DEVELOP_BRANCH must be set to the development Git repository branch."
+test -n "${RELEASE_BRANCH:-}" || bail "RELEASE_BRANCH must be set to the main Git repository branch."
+
+if [[ -n "${PRERELEASE}" ]] ; then
+	RELEASE_NOTES_PATH="pre-release-notes"
+	cat <<EOF > "$RELEASE_NOTES_PATH"
+<!--- Release Notes for v${VERSION} -- Do not move --->
+This is a prerelease - please see commit messages for changes
+EOF
+else 
+  test -n "${GIT_EMAIL:-}"      || bail "GIT_EMAIL must be set to an email address to use for Git commits."
+  test -n "${GIT_NAME:-}"       || bail "GIT_NAME must be set to something; it will be used for Git commits."
+  test -n "${RELEASE_ROOT:-}"   || bail "RELEASE_ROOT must be set to the output directory where release artifacts should go."
+  test -n "${RELEASE_NOTES:-}"  || bail "RELEASE_NOTES must be set to the filename of the release notes."
+  RELEASE_NOTES_PATH="${RELEASE_NOTES_ROOT}/${RELEASE_NOTES}"
+  test -f "${RELEASE_NOTES_PATH}" || \
+    bail "Release notes file (${RELEASE_NOTES_PATH}) not found."
+fi
+
+test -n "${KIT_SHORTNAME:-}"  || bail "KIT_SHORTNAME must be set to the short name of this kit."
+test -n "${GITHUB_OWNER:-}"   || bail "GITHUB_OWNER must be set to the name of the Github user or organization that owns the Git repository."
+echo "Environment OK"
+
+###############################################################
+header "Assembling Github Release Artifacts..."
+mkdir -p "${RELEASE_ROOT}/artifacts"
+echo "v${VERSION}"           "-> ${RELEASE_ROOT}/tag"
+echo "v${VERSION}"            > "${RELEASE_ROOT}/tag"
+echo "v${VERSION}"           "-> ${RELEASE_ROOT}/name"
+echo "v${VERSION}"            > "${RELEASE_ROOT}/name"
+if [[ -n "$PRERELEASE" ]] ; then
+  echo "$(cat git/.git/ref)" "-> ${RELEASE_ROOT}/commit (pre-release)"
+  cp    git/.git/ref            "${RELEASE_ROOT}/commit"
+fi
+cp -av "${BUILD_ROOT}"/*.tar.gz "${RELEASE_ROOT}/artifacts"
+
+if [[ -d spec-check ]] ; then
+  if ! grep "No Spec Changes to Consider" spec-check/diff-* ; then
+    echo spec-check/diff-* "-> ${RELEASE_ROOT}/artifacts/spec-diffs.html"
+    cat spec-check/diff-* | aha > "${RELEASE_ROOT}/artifacts/spec-diffs.html"
+  else
+    echo "spec-check -> no changes in specs to release"
+  fi
+fi
+
+header "Release Notes for v${VERSION}"
+header="$(sed -i -e '1{w /dev/stdout' -e 'd}' "${RELEASE_NOTES_PATH}")"
+re="^<\!--- Release Notes for v${VERSION} -- Do not move --->$"
+if [[ "$header" =~ $re ]] ; then
+  sed -i  '/^---8<--- This line and everything below will be ignored ---8<---$/,$d' "${RELEASE_NOTES_PATH}"
+  cat "${RELEASE_NOTES_PATH}"
+  cp "${RELEASE_NOTES_PATH}" "$RELEASE_ROOT/notes.md"
+else
+  echo "Failed to find release notes for v$VERSION in $RELEASE_NOTES_PATH.  Found this instead:"
+  echo
+  echo "$header"
+  cat "${RELEASE_NOTES_PATH}"
+  exit 1
+fi
+
+if [[ -z "${PRERELEASE}" && "$DEVELOP_BRANCH" != "$RELEASE_BRANCH" ]] ; then
+  header "Fast-forward merge develop into ${RELEASE_BRANCH}"
+  pushd git-main &>/dev/null
+    git config --global user.name  "${GIT_NAME}"
+    git config --global user.email "${GIT_EMAIL}"
+    if ! git pull ../git -X theirs --no-edit --ff-only ; then
+      # if this fails, manual intervention is required.
+      echo >&2 \
+        $'\n'"'$RELEASE_BRANCH' release branch contains commits that the '$DEVELOP_BRANCH' does not have" \
+        $'\n'"Cannot push changes to release branch..."
+      exit 1
+    fi
+  popd &>/dev/null
+fi
+
+cat > "${NOTIFICATION_OUT:-notifications}/message" <<EOS
+New ${KIT_SHORTNAME} Genesis Kit v${VERSION} released. <https://github.com/${GITHUB_OWNER}/${KIT_SHORTNAME}-genesis-kit/releases/tag/v${VERSION}|Release notes>.
+EOS
+
+echo
+echo "--------------------------------------------------------------------------------"
+echo "SUCCESS"
+exit 0
+
+$$--GLUE--$$
+.\ci\scripts\smoketest-disabled.sh
+$$--GLUE--$$
+	genesis "do" "${DEPLOY_ENV}" -- smoketest
+
+$$--GLUE--$$
+.\ci\scripts\spec-check.sh
+$$--GLUE--$$
+#!/bin/bash
+set -e
+
+# Resource Directories
+REPO_ROOT="git"
+CI_ROOT="git-ci"
+TAG_ROOT="git-latest-tag"
+OUTPUT_ROOT="spec-check"
+
+CI_PATH="$(cd "${CI_ROOT}" && pwd)"
+TAG="$(cat "${TAG_ROOT}/.git/ref")"
+results_file="$(cd "${OUTPUT_ROOT}" && pwd)/diff-$(date -u +%Y%m%d%H%M%S)"
+
+# Run as a script to preserve color output
+export CI_PATH
+export TAG
+pushd "${REPO_ROOT}" &>/dev/null
+script --flush --quiet \
+  --return  "$results_file" \
+  --command '"${CI_PATH}"/ci/scripts/compare-release-specs "$TAG"'
+
+# Trim script header/footer (ignore error)
+sed -i '1d;$d' "$results_file" || true
+
+$$--GLUE--$$
+.\ci\scripts\test-addons.sh
+$$--GLUE--$$
+  safe_target_orig="$(safe target --json | jq -r .name)"
+  genesis "do" "${DEPLOY_ENV}" -- init
+  genesis "do" "${DEPLOY_ENV}" -- status
+  safe get secret/vault/seal/keys
+  safe target "$safe_target_orig"
+
+$$--GLUE--$$
+.\ci\scripts\test-deployment.sh
+$$--GLUE--$$
+#!/bin/bash
+set -eux
+
+DEPLOY_ENV=${DEPLOY_ENV:-"ci-baseline"}
+SKIP_FRESH=${SKIP_FRESH:-"false"}
+SKIP_REPLACE_SECRETS=${SKIP_REPLACE_SECRETS:-"false"}
+SKIP_DEPLOY=${SKIP_DEPLOY:-"false"}
+SKIP_SMOKE_TESTS=${SKIP_SMOKE_TESTS:-"false"}
+SKIP_CLEAN=${SKIP_CLEAN:-"false"}
+
+header() {
+  echo
+  echo "================================================================================"
+  echo "$1"
+  echo "--------------------------------------------------------------------------------"
+  echo
+}
+
+has_feature() {
+	genesis "$1" lookup kit.features 2>/dev/null | jq -e --arg feature "$2" '. | index($feature)' >/dev/null
+}
+
+is_proto() {
+	has_feature "$1" 'proto' # This will need to be changed in v2.8.0
+}
+
+cleanup_environment() {
+	local env="$1"
+	if [[ -f .genesis/manifests/$env-state.yml ]] ; then
+		header "Preparing to delete proto environment $env"
+		echo "Generating reference manifest..."
+		genesis "$env" manifest --no-redact > manifest.yml 2>/dev/null
+		echo $'\n'"Building BOSH variables file..."
+		genesis "${env}" lookup --merged bosh-variables > vars.yml 2>/dev/null
+		echo $'\n'"$env state file:"
+		echo "----------------->8------------------"
+		cat ".genesis/manifests/$env-state.yml"
+		echo "----------------->8------------------"
+		header "Deleting $DEPLOY_ENV environment..."
+		$BOSH delete-env --state ".genesis/manifests/$env-state.yml" --vars-file vars.yml manifest.yml
+		rm manifest.yml
+		rm vars.yml
+	else
+		echo "Cannot clean up previous $env environment - no state file found"
+	fi
+}
+
+cleanup_deployment() {
+	local deployment="$1"
+	echo "> deleting ${deployment}"
+	$BOSH -n -d "${deployment}" delete-deployment
+
+	for disk in $($BOSH disks --orphaned | grep "${deployment}" | awk '{print $1}'); do
+		echo
+		echo "Removing disk $disk"
+		$BOSH -n delete-disk "$disk"
+	done
+}
+
+cleanup() {
+	for deployment in "$@"; do
+		if is_proto "$deployment" ; then
+			cleanup_environment "$deployment"
+		else ( # run in a subshell to prevent pollution
+			eval "$(genesis bosh --connect "${deployment}" 2>/dev/null)"
+			cleanup_deployment "$deployment-${KIT_SHORTNAME}"
+		); fi
+	done
+}
+
+vault_path="$(genesis "$DEPLOY_ENV" lookup --env GENESIS_SECRETS_BASE)"
+exodus_path="$(genesis "$DEPLOY_ENV" lookup --env GENESIS_EXODUS_BASE)"
+vault_path="${vault_path%/}" # trim any trailing slash
+# -----
+
+header "Pre-test Cleanup"
+if [[ "$SKIP_FRESH" == "false" ]]; then
+	echo "Deleting any previous deploy"
+	cleanup "${DEPLOY_ENV}"
+else
+	echo "Skipping cleaning up from any previous deploy"
+fi
+
+if [[ -z "$vault_path" ]] ; then
+  echo >&2 "Failed to determine vault path.  Cannot continue!"
+  exit 2
+fi
+
+if [[ "$SKIP_REPLACE_SECRETS" == "false" ]] ; then
+	# Remove safe values
+	[[ -n "${vault_path:-}" ]] && \
+		echo "Removing existing secrets under $vault_path ..." && \
+		safe rm -rf "$vault_path" && true
+	[[ -n "${exodus_path:-}" ]] && \
+		echo "Removing existing exodus data under $exodus_path ..." && \
+		safe rm -rf "$exodus_path" && true
+
+	# Remove credhub values
+	if ! is_proto "$DEPLOY_ENV" ; then (
+		bosh_env="$(genesis "$DEPLOY_ENV" lookup genesis 2>/dev/null | jq -r '.bosh_env // .env')"
+		[[ "$bosh_env" =~ / ]] || bosh_env="${bosh_env}/bosh"
+
+		bosh_exodus="$(genesis "$DEPLOY_ENV" lookup --exodus-for "$bosh_env" . "{}" 2>/dev/null)"
+		CREDHUB_SERVER="$(jq -r '.credhub_url // ""' <<<"$bosh_exodus")"
+		if [[ -n "$CREDHUB_SERVER" ]] ; then
+			echo
+			echo "Attempting to remove credhub secrets under /${bosh_env/\//-}/${DEPLOY_ENV}-${KIT_SHORTNAME}/"
+			CREDHUB_CLIENT="$(jq -r '.credhub_username // ""' <<<"$bosh_exodus")"
+			CREDHUB_SECRET="$(jq -r '.credhub_password // ""' <<<"$bosh_exodus")"
+			CREDHUB_CA_CERT="$(jq -r '"\(.credhub_ca_cert)\(.ca_cert)"' <<<"$bosh_exodus")"
+			export CREDHUB_SERVER CREDHUB_CLIENT CREDHUB_SECRET CREDHUB_CA_CERT
+			credhub delete -p "/${bosh_env/\//-}/${DEPLOY_ENV}-${KIT_SHORTNAME}/"
+			echo
+		fi
+	) ; fi
+
+  if [[ -n "$SECRETS_SEED_DATA" ]] ; then
+
+    header "Importing required user-provided seed data for $DEPLOY_ENV"
+    # Replace and sanitize seed data
+    seed=
+    if ! seed="$(echo "$SECRETS_SEED_DATA" | spruce merge --skip-eval | spruce json | jq -M .)" ; then
+      echo >&2 "Secrets seed data is corrupt; expecting valid JSON"
+      exit 1
+    fi
+    if ! bad_keys="$(jq -rM '. | with_entries( select(.key|test("^\\${GENESIS_SECRETS_BASE}/")|not))| keys| .[] | "  - \(.)"' <<<"$seed")" ; then
+      echo >&2 "Failed to validate secrets seed data keys: $bad_keys"
+      exit 1
+    fi
+    if [[ -n "$bad_keys" ]] ; then
+      echo >&2 "Secrets seed data contains bad keys.  All keys must start with "
+      echo >&2 "'\${GENESIS_SECRETS_BASE}/', and the following do not:"
+      echo >&2 "$bad_keys"
+      exit 1
+    fi
+    processed_data=
+    if ! processed_data="$( jq -M --arg p "$vault_path/" '. | with_entries( .key |= sub("^\\${GENESIS_SECRETS_BASE}/"; $p))' <<<"$seed")" ; then
+      echo >&2 "Failed to import secret seed data"
+      exit 1
+    fi
+    if ! safe import <<<"$processed_data" ; then
+      echo >&2 "Failed to import secrets seed data"
+      exit 1
+    fi
+  fi
+else
+	echo "Skipping replacing secrets"
+fi
+
+if [[ "$SKIP_DEPLOY" == "false" ]]; then
+	header "Deploying ${DEPLOY_ENV} environment to verify functionality..."
+	genesis "${DEPLOY_ENV}" "do" -- list
+	genesis "${DEPLOY_ENV}" add-secrets
+
+	# get and upload stemcell version if needed (handled by bosh cli if version and name are supplied)
+	stemcell_iaas=
+	case "${INFRASTRUCTURE:-none}" in
+		aws)         stemcell_iaas="aws-xen-hvm" ;;
+		azure)       stemcell_iaas="azure-hyperv" ;;
+		openstack)   stemcell_iaas="openstack-kvm" ;;
+		warden)      stemcell_iaas="warden-boshlite" ;;
+		google|gcp)  stemcell_iaas="google-kvm" ;;
+		vsphere)     stemcell_iaas="vsphere-esxi" ;;
+		*)           echo >&2 "Unknown or missing INFRASTRUCTURE value -- cannot upload stemcell" ;;
+	esac
+
+	if [[ -n "$stemcell_iaas" ]] ; then
+		stemcell_data="$(genesis "${DEPLOY_ENV}" lookup --merged stemcells)"
+		stemcell_os="$(jq -r '.[0].os' <<<"$stemcell_data")"
+		stemcell_version="$(jq -r '.[0].version' <<<"$stemcell_data")"
+		stemcell_name="bosh-${stemcell_iaas}-${stemcell_os}-go_agent"
+		upload_options=('--version' "${stemcell_version}" '--name' "$stemcell_name")
+		upload_params="?v=${stemcell_version}"
+		if [[ "$stemcell_version" == "latest" ]] ; then
+			stemcell_version='[0-9]\+\.[0-9]\+'
+			upload_options=()
+			upload_params=""
+		fi
+		if ! genesis "${DEPLOY_ENV}" bosh stemcells 2>/dev/null \
+		   | grep "^${stemcell_name}" \
+		   | awk '{print $2}' | sed -e 's/\*//' \
+		   | grep "^${stemcell_version}\$" ; then
+			genesis "${DEPLOY_ENV}" bosh upload-stemcell "https://bosh.io/d/stemcells/$stemcell_name${upload_params}" ${upload_options[@]+"${upload_options[@]}"}
+		fi
+	fi
+
+	genesis "${DEPLOY_ENV}" deploy -y
+
+	if [[ -f .genesis/manifests/${DEPLOY_ENV}-state.yml ]] ; then
+		echo $'\n'"${DEPLOY_ENV} state file:"
+		echo "----------------->8------------------"
+		cat ".genesis/manifests/${DEPLOY_ENV}-state.yml"
+		echo "----------------->8------------------"
+	fi
+
+	genesis "${DEPLOY_ENV}" info
+	if ! is_proto "$DEPLOY_ENV" ; then
+		genesis "${DEPLOY_ENV}" bosh instances --ps
+	fi
+
+fi
+
+if [[ "$SKIP_SMOKE_TESTS" == "false" ]]; then
+  if [[ -f "$0/test-addons" ]] ; then
+    header "Validating addons..."
+    # shellcheck source=/dev/null
+    source "$0/test-addons"
+  fi
+
+  if [[ -f "$0/smoketests" ]] ; then
+    header "Running smoke tests..."
+    # shellcheck source=/dev/null
+    source "$0/smoketests"
+  fi
+else
+	echo "Skipping smoke_tests"
+fi
+
+if [[ "$SKIP_CLEAN" == "false" ]]; then
+	cleanup "${DEPLOY_ENV}"
+else
+	echo "Skipping CLEANUP"
+fi
+$$--GLUE--$$
+.\ci\scripts\update-release.sh
+$$--GLUE--$$
+#!/bin/bash
+
+set -e
+set -o pipefail
+export TERM=xterm-256color
+
+header() {
+  echo
+  echo "================================================================================"
+  echo "$1"
+  echo "--------------------------------------------------------------------------------"
+  echo
+}
+
+bail() {
+  echo >&2 "[1;31m[ERROR][0m $*  Did you misconfigure Concourse?"
+  exit 2
+}
+
+test -n "${GIT_EMAIL:-}"      || bail "GIT_EMAIL must be set to an email address to use for Git commits."
+test -n "${GIT_NAME:-}"       || bail "GIT_NAME must be set to something; it will be used for Git commits."
+test -n "${RELEASE_NAME:-}"   || bail "RELEASE_NAME must be set to whatever the release name is."
+test -n "${RELEASE_PATH:-}"   || bail "RELEASE_PATH must be set to the relative position of the release override file."
+test -n "${BRANCH:-}"         || bail "BRANCH must be set to the branch to update."
+
+# Get release details
+pushd bosh-release &> /dev/null
+release_name=$RELEASE_NAME
+release_version="$( cat version )"
+url="$( cat url )"
+if [[ -f sha1 ]] ; then # bosh-io-release
+  sha1=$( cat sha1 )
+else # github-release (maybe others?)
+  filename="$( compgen -G "$release_name"*"$release_version.tar.gz" \
+            || compgen -G "$release_name"*"$release_version.tar" \
+            || compgen -G "$release_name"*"$release_version.tgz" \
+            || compgen -G "$release_name"*"$release_version.zip" )"
+  if [[ "$url" =~ https://github.com.*releases/tag/v?$release_version ]] ; then
+    url="${url/\/tag\//\/download\/}/$filename"
+  fi
+  sha1="$( sha1sum "$filename" | cut -d' ' -f1)"
+fi
+popd &> /dev/null
+
+# Create ops-file
+if ! grep -q "version: \\+${release_version}\$" "git/${RELEASE_PATH}"; then
+
+  cat > "git/${RELEASE_PATH}" <<YML
+releases:
+- name: ${release_name}
+  version: ${release_version}
+  url: ${url}
+  sha1: ${sha1}
+YML
+
+  header "Release file changes:"
+  results="$(git -C git diff -b --color=always "${RELEASE_PATH}" | cat)"
+  if echo "$results" | grep -q '.' ; then
+    echo "$results"
+  else
+    echo "No differences found"
+    exit 0
+  fi
+
+  header "Recreate spec-test results to validate upstream"
+  pushd git/spec &> /dev/null
+  # TODO: remove spec/{credhub,vault} if needed? because this will regenerate vault.
+  rm -rf results/
+  ACK_GINKGO_RC=true ginkgo -p
+  popd &> /dev/null
+
+  header "Spec file changes:"
+  git -C git diff --color=always spec/results/ | cat
+
+  if [[ -n $(git -C git status -s) ]]; then
+
+    header "Commiting updates to git"
+    git config --global user.name  "${GIT_NAME}"
+    git config --global user.email "${GIT_EMAIL}"
+
+    pushd git &>/dev/null
+    git add "${RELEASE_PATH}"
+    git add spec/
+    git commit -m "Release updated: ${release_name}/${release_version}"
+
+    # The following is done to ensure a clean push to the develop branch, while
+    # basing the input on a version that last passed the spec-tests.
+    https_url="$(git remote -v | grep '(fetch)' | sed -e 's/.*github.com:\(.*\) (fetch)/https:\/\/github.com\/\1/')"
+    git remote add live "$https_url"
+    git pull --rebase=merges live "$BRANCH" -X theirs --no-edit
+    git remote remove live
+    popd &> /dev/null
+  else
+    echo "No changes detected."
+  fi
+else
+  echo "Nothing to do as versions are the same"
+fi
