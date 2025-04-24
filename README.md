@@ -11,6 +11,7 @@ The Genesis Build-Test-Spec Action is designed to:
 3. Check for breaking changes
 4. Test deployments
 5. Detect release commits and prepare release branches
+6. Support customization through CI hooks
 
 ## Action Workflow
 
@@ -40,6 +41,13 @@ flowchart TD
     G1[Compare with Previous Release]
     G2[Check for Breaking Changes]
     G1 --> G2
+    end
+
+    subgraph "CI Hooks"
+    Z1[Pre-hooks]
+    Z2[Main Action Step]
+    Z3[Post-hooks]
+    Z1 --> Z2 --> Z3
     end
 ```
 
@@ -102,6 +110,15 @@ For release commits, this component:
 - Generates comprehensive release notes
 - Opens a pull request to the release branch
 
+### CI Hooks System
+
+The CI hooks system allows custom script execution at specific workflow points:
+
+- Pre-hooks run before each action step
+- Post-hooks run after each action step
+- Supports flexible repository layouts
+- Enables customization without modifying core scripts
+
 ## Usage
 
 ```yaml
@@ -110,6 +127,8 @@ For release commits, this component:
     kit_name: shield
     version_bump: patch
     github_token: ${{ secrets.GITHUB_TOKEN }}
+    ci_hooks_path: ci/ci-hooks            # Optional: Custom path for CI hooks
+    ci_envs_path: ci/envs                 # Optional: Custom path for environment files
     # Additional configuration as needed
 ```
 
@@ -130,6 +149,8 @@ For release commits, this component:
 | `deploy_env` | Deployment environment for testing | `ci-vsphere-baseline` |
 | `iaas_provider` | Infrastructure type (vsphere, aws, gcp, etc) | `vsphere` |
 | `release_branch` | Branch to create PR against for releases | `main` |
+| `ci_hooks_path` | Path to CI hook scripts | `ci/ci-hooks` |
+| `ci_envs_path` | Path to deployment environment files | `ci/envs` |
 
 Additional inputs for infrastructure and Genesis/BOSH credentials are also available.
 
@@ -142,6 +163,56 @@ Additional inputs for infrastructure and Genesis/BOSH credentials are also avail
 | `has_breaking_changes` | Whether breaking changes were detected |
 | `is_release_commit` | Whether the commit message indicates a release |
 | `release_version` | Version to release from commit message |
+
+## CI Hooks System
+
+The CI hooks system allows you to extend the workflow without modifying core scripts.
+
+### Hook Naming Convention
+
+Hooks follow this naming pattern:
+```
+<pre|post>-<workflow>_<job>_<step>[-number]
+```
+
+For example:
+- `pre-action_build-test_Build-Kit` - Runs before the Build Kit step
+- `post-action_build-test_Run-Spec-Tests` - Runs after the Run Spec Tests step
+- `pre-action_build-test_Deploy-and-Test-1` - First hook running before Deploy and Test
+
+### Directory Structure
+
+You can place hooks in either of these locations:
+- Primary location (default): `ci/ci-hooks/`
+- Alternate location: `.github/ci-hooks/`
+
+Similarly, environment files can be in:
+- Primary location (default): `ci/envs/`
+- Alternate location: `.github/envs/`
+
+### Example Repository Structure
+
+```
+my-kit-repo/
+├── .github/
+│   ├── workflows/
+│   │   └── ci.yml
+│   ├── envs/              # Alternate location for environment files
+│   │   ├── ci.yml
+│   │   └── ci-vsphere-baseline.yml  
+│   └── ci-hooks/          # Alternate location for CI hooks
+│       ├── pre-action_build-test_Build-Kit
+│       └── post-action_build-test_Deploy-and-Test
+├── ci/
+│   ├── ci-hooks/          # Primary location for CI hooks
+│   └── envs/              # Primary location for environment files
+├── hooks/
+├── manifests/
+└── spec/
+    └── results/
+```
+
+For more details on using CI hooks, see the [CI Hooks Documentation](docs/ci-hooks.md).
 
 ## Integration with Genesis Release Action
 
@@ -172,20 +243,6 @@ sequenceDiagram
         BuildTestAction->>GitHub: Upload artifacts
         GitHub->>Developer: CI status notification
     end
-```
-
-## Repository Structure Requirements
-
-To use this action, your Genesis kit repository should have:
-
-```
-your-kit-repo/
-├── ci/
-│   ├── envs/           # Deployment environment files
-│   │   ├── ci.yml
-│   │   └── ci-vsphere-baseline.yml
-├── spec/               # Spec tests
-└── version             # Version file
 ```
 
 ## Example CI Workflow
@@ -231,6 +288,9 @@ jobs:
           kit_name: your-kit-name
           version_bump: ${{ github.event.inputs.version_bump || 'patch' }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Optional custom paths
+          ci_hooks_path: ci/ci-hooks
+          ci_envs_path: ci/envs
           # Additional configuration
           
       - uses: actions/upload-artifact@v4
@@ -249,6 +309,50 @@ jobs:
           path: release-notes/*
 ```
 
+## Creating Your First CI Hook
+
+Here's an example of a simple pre-hook for the Build Kit step:
+
+```bash
+#!/bin/bash
+# Path: ci/ci-hooks/pre-action_build-test_Build-Kit
+
+set -e  # Exit immediately if a command exits with a non-zero status
+
+echo "🔍 Starting custom pre-hook for Build Kit step"
+
+# Example: Add a custom message to the kit description
+if [[ -f kit.yml ]]; then
+  echo "🔧 Customizing kit description"
+  # Add build timestamp to kit description
+  BUILD_TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+  sed -i "s/^description: \(.*\)/description: \1 (Built on $BUILD_TIMESTAMP)/" kit.yml
+  echo "✅ Kit description updated with build timestamp"
+fi
+
+echo "✅ Pre-hook completed successfully"
+```
+
+Make sure to make your hook script executable:
+```bash
+chmod +x ci/ci-hooks/pre-action_build-test_Build-Kit
+```
+
+## Troubleshooting
+
+### Common Issues
+
+- **Hook not executing**: Ensure the hook script is named correctly and has executable permissions
+- **Environment file not found**: Verify the path to environment files is correct
+- **Vault connection issues**: Check Vault credentials and connectivity
+- **Test failures**: Review the spec test logs for detailed error information
+
 ## License
 
 MIT
+
+## Acknowledgements
+
+- The Genesis Community for their ongoing support
+- Contributors to the Genesis ecosystem
+- All users who provide feedback and report issues

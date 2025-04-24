@@ -34,6 +34,14 @@ inputs:
     description: 'Branch to create PR against for releases'
     required: false
     default: 'main'
+  ci_envs_path:
+    description: 'Path to deployment environment files'
+    required: false
+    default: 'ci/envs'
+  ci_hooks_path:
+    description: 'Path to CI hook scripts'
+    required: false
+    default: 'ci/ci-hooks'
   # Infrastructure credentials
   aws_access_key_id:
     description: 'AWS Access Key ID'
@@ -99,12 +107,78 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Initialize hook paths
+      shell: bash
+      run: |
+        echo "::group::Initializing hook and environment paths"
+        # Create hook finder script
+        cat > ${{ github.action_path }}/find-hooks.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        # Usage: find-hooks.sh <pre|post> <workflow> <job> <step>
+        # Example: find-hooks.sh pre action build-test "Setup tools"
+        
+        HOOK_TYPE="$1"   # pre or post
+        WORKFLOW="$2"    # workflow name (without .yml)
+        JOB="$3"         # job name with dashes
+        STEP="$4"        # step name with spaces replaced by dashes
+        
+        # Replace spaces with dashes in step name
+        STEP_NORMALIZED="${STEP// /-}"
+        
+        # Primary and alternate hook paths
+        CI_HOOKS_PATH="${CI_HOOKS_PATH:-ci/ci-hooks}"
+        ALT_HOOKS_PATH="${ALT_HOOKS_PATH:-.github/ci-hooks}"
+        
+        # Base pattern for hook scripts
+        HOOK_PATTERN="${HOOK_TYPE}-${WORKFLOW}_${JOB}_${STEP_NORMALIZED}*"
+        
+        # Find hooks in primary path
+        if [[ -d "$CI_HOOKS_PATH" ]]; then
+          find "$CI_HOOKS_PATH" -name "$HOOK_PATTERN" -type f 2>/dev/null | sort || true
+        fi
+        
+        # Find hooks in alternate path
+        if [[ -d "$ALT_HOOKS_PATH" ]]; then
+          find "$ALT_HOOKS_PATH" -name "$HOOK_PATTERN" -type f 2>/dev/null | sort || true
+        fi
+        EOF
+        
+        chmod +x ${{ github.action_path }}/find-hooks.sh
+        
+        # Set environment variables for hook paths
+        echo "CI_HOOKS_PATH=${{ inputs.ci_hooks_path }}" >> $GITHUB_ENV
+        echo "ALT_HOOKS_PATH=.github/ci-hooks" >> $GITHUB_ENV
+        
+        # Set environment variables for env paths
+        echo "CI_ENVS_PATH=${{ inputs.ci_envs_path }}" >> $GITHUB_ENV
+        echo "ALT_ENVS_PATH=.github/envs" >> $GITHUB_ENV
+        echo "::endgroup::"
+
     - name: Setup tools
       shell: bash
       run: |
         echo "::group::Setting up required tools"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Setup tools"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/setup-tools.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Setup tools"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     # VERSION MANAGEMENT
@@ -113,8 +187,25 @@ runs:
       shell: bash
       run: |
         echo "::group::Getting current version"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Get current version"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/get-current-version.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Get current version"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     - name: Bump version
@@ -125,8 +216,25 @@ runs:
         CURRENT_VERSION: ${{ steps.current.outputs.current_version }}
       run: |
         echo "::group::Bumping version from ${{ steps.current.outputs.current_version }}"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Bump version"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/bump-version.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Bump version"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     # Check if this is a release commit
@@ -135,8 +243,25 @@ runs:
       shell: bash
       run: |
         echo "::group::Checking if this is a release commit"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Check for release commit"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/check-release-commit.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Check for release commit"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     # BUILD KIT (Required even in debug mode)
@@ -151,8 +276,25 @@ runs:
         BUILD_ROOT: "build"
       run: |
         echo "::group::Building Genesis Kit ${{ inputs.kit_name }} v${{ steps.version.outputs.new_version }}"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Build Kit"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/build-kit.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Build Kit"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     # Conditionally run testing steps
@@ -165,8 +307,25 @@ runs:
         VERSION: ${{ steps.version.outputs.new_version }}
       run: |
         echo "::group::Setting up debug mode and skipping tests"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Setup debug mode"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/setup-debug-mode.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Setup debug mode"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     # RUN SPEC TESTS - Skip in debug mode
@@ -177,8 +336,25 @@ runs:
         GO_VERSION: ${{ inputs.go_version }}
       run: |
         echo "::group::Setting up Go ${{ inputs.go_version }} for tests"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Setup Go for tests"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/setup-go.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Setup Go for tests"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     - name: Run Spec Tests
@@ -192,8 +368,25 @@ runs:
         GINKGO_PARAMS: ${{ inputs.ginkgo_params }}
       run: |
         echo "::group::Running specification tests with Ginkgo ${{ inputs.ginkgo_params }}"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Run Spec Tests"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/run-spec-tests.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Run Spec Tests"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     # SPEC CHANGE CHECK - Skip in debug mode
@@ -208,8 +401,25 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
       run: |
         echo "::group::Checking specifications for breaking changes"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Check Specs for breaking changes"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/check-specs.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Check Specs for breaking changes"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     - name: Check for breaking changes
@@ -218,8 +428,25 @@ runs:
       shell: bash
       run: |
         echo "::group::Analyzing breaking change report"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Check for breaking changes"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/check-breaking-changes.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Check for breaking changes"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     # INFRASTRUCTURE SETUP FOR DEPLOYMENT - Skip in debug mode
@@ -235,8 +462,25 @@ runs:
         IAAS_PROVIDER: ${{ inputs.iaas_provider }}
       run: |
         echo "::group::Setting up ${{ inputs.iaas_provider }} infrastructure"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Setup Infrastructure"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/setup-infrastructure.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Setup Infrastructure"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
     
     # VAULT SETUP - Skip in debug mode
@@ -247,8 +491,25 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
       run: |
         echo "::group::Setting up HashiCorp Vault"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Setup Vault"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/setup-vault.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Setup Vault"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     # DEPLOYMENT TEST - Skip in debug mode
@@ -272,10 +533,76 @@ runs:
         KIT_SHORTNAME: ${{ inputs.kit_name }}
         BUILD_ROOT: "build"
         ACTION_PATH: ${{ github.action_path }}
+        CI_ENVS_PATH: ${{ env.CI_ENVS_PATH }}
+        ALT_ENVS_PATH: ${{ env.ALT_ENVS_PATH }}
       run: |
         echo "::group::Deploying and testing to ${{ inputs.deploy_env }}"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Deploy and Test"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
-        ${{ github.action_path }}/ci/scripts/actions/deploy-and-test.sh
+        
+        # Modify deploy-and-test.sh to use configurable environment paths
+        cat > ${{ github.action_path }}/ci/scripts/actions/deploy-and-test-patched.sh << 'EOF'
+        #!/bin/bash
+        set -e
+
+        echo "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀"
+        echo "🔍 DEBUG: Starting deployment test to environment $DEPLOY_ENV"
+        sudo mkdir -p $CI_ROOT/ci/
+        sudo chmod a+rwx $CI_ROOT/ci/
+        echo "🔍 DEBUG: Setting up CI scripts and environments"
+        cp -r $ACTION_PATH/ci/scripts/* $CI_ROOT/ci/ci/scripts/
+
+        # Primary and alternate environment paths
+        PRIMARY_ENVS_PATH="${CI_ENVS_PATH:-ci/envs}"
+        ALT_ENVS_PATH="${ALT_ENVS_PATH:-.github/envs}"
+
+        # First try primary path
+        if [[ -d "./${PRIMARY_ENVS_PATH}" ]]; then
+          echo "🔍 DEBUG: Using environment files from ${PRIMARY_ENVS_PATH}"
+          mkdir -p $CI_ROOT/ci/envs/
+          cp -r "./${PRIMARY_ENVS_PATH}/"* $CI_ROOT/ci/envs/
+        # Then try alternate path
+        elif [[ -d "./${ALT_ENVS_PATH}" ]]; then
+          echo "🔍 DEBUG: Using environment files from ${ALT_ENVS_PATH}"
+          mkdir -p $CI_ROOT/ci/envs/
+          cp -r "./${ALT_ENVS_PATH}/"* $CI_ROOT/ci/envs/
+        else
+          echo "⚠️ ERROR: No environment files found in ${PRIMARY_ENVS_PATH} or ${ALT_ENVS_PATH}"
+          exit 1
+        fi
+
+        # Verify environment file exists
+        if [[ ! -f "$CI_ROOT/ci/envs/${DEPLOY_ENV}.yml" ]]; then
+          echo "⚠️ ERROR: Environment file ${DEPLOY_ENV}.yml not found"
+          echo "Available environments:"
+          ls -la "$CI_ROOT/ci/envs/"
+          exit 1
+        fi
+
+        echo "🔍 DEBUG: Launching deployment script"
+        $ACTION_PATH/ci/scripts/deploy.sh
+        echo "✅ Deployment and testing completed successfully"
+        echo "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀"
+        EOF
+        
+        chmod +x ${{ github.action_path }}/ci/scripts/actions/deploy-and-test-patched.sh
+        ${{ github.action_path }}/ci/scripts/actions/deploy-and-test-patched.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Deploy and Test"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     # GENERATE RELEASE NOTES - Simplified in debug mode
@@ -290,8 +617,25 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
       run: |
         echo "::group::Generating release notes for v${{ steps.version.outputs.new_version }}"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Generate Release Notes"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/generate-release-notes.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Generate Release Notes"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     # CREATE PR FOR RELEASE OR MANUAL TRIGGER
@@ -307,8 +651,25 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
         echo "::group::Creating pull request for release v${{ steps.check-release-commit.outputs.is_release == 'true' && steps.check-release-commit.outputs.version || steps.version.outputs.new_version }}"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Create Pull Request for Release"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/create-pr.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Create Pull Request for Release"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
 
     - name: Add explanation comment to PR
@@ -325,6 +686,23 @@ runs:
         RELEASE_BRANCH: ${{ inputs.release_branch }}
       run: |
         echo "::group::Adding explanation comment to pull request"
+        
+        # Run pre-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Add explanation comment to PR"); do
+          echo "🪝 Executing pre-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
+        # Execute main step
         chmod -R +x ${{ github.action_path }}/ci/scripts
         ${{ github.action_path }}/ci/scripts/actions/add-pr-comment.sh
+        
+        # Run post-hooks
+        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Add explanation comment to PR"); do
+          echo "🪝 Executing post-hook: $(basename $hook)"
+          chmod +x "$hook"
+          "$hook"
+        done
+        
         echo "::endgroup::"
