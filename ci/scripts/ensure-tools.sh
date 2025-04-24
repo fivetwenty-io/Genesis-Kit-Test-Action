@@ -37,10 +37,18 @@ success=false
 while [ $attempt -le $max_attempts ] && [ "$success" = false ]; do
     echo "Attempt $attempt of $max_attempts to summon Vault from Hashicorp's hopefully-not-napping servers..."
     
-    if wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg --yes && \
+    # First try the direct binary download approach
+    if wget -q https://releases.hashicorp.com/vault/1.14.0/vault_1.14.0_linux_amd64.zip && \
+       unzip -q vault_1.14.0_linux_amd64.zip && \
+       sudo mv vault /usr/local/bin/ && \
+       sudo chmod +x /usr/local/bin/vault; then
+        echo "Success! Vault binary downloaded and installed directly."
+        success=true
+    # Fall back to apt installation if direct download fails
+    elif wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg --yes && \
        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list && \
        sudo apt update && sudo apt install vault -y; then
-        echo "Success! Vault has graciously decided to join us."
+        echo "Success! Vault has graciously decided to join us via apt."
         success=true
     else
         echo "Attempt $attempt failed. Hashicorp seems to be having a coffee break... ☕"
@@ -53,8 +61,18 @@ if [ "$success" = false ]; then
     echo "After $max_attempts attempts, Vault is still playing hard to get. Time to panic! 🔥"
     exit 1
 fi
-chmod a+x /usr/bin/vault
-chmod a+x $(which vault)
+
+# Make sure both possible vault locations are executable
+if [ -f /usr/bin/vault ]; then
+    sudo chmod a+x /usr/bin/vault
+fi
+if [ -f /usr/local/bin/vault ]; then
+    sudo chmod a+x /usr/local/bin/vault
+fi
+
+# Use the first vault we find in the PATH
+vault_path=$(which vault)
+chmod a+x "$vault_path" || echo "Warning: Could not set executable permission on $vault_path"
 
 echo "Checking installed binaries..."
 ls -la /usr/bin/
