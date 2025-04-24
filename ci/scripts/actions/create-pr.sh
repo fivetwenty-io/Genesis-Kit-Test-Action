@@ -3,9 +3,17 @@ set -e
 
 echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"
 echo "🔍 DEBUG: Creating pull request for release v${VERSION}"
+
+# Configure git user
 git config --global user.name "Genesis CI Bot"
 git config --global user.email "genesis-ci@example.com"
 echo "🔍 DEBUG: Git user configured as Genesis CI Bot"
+
+# Configure authentication for git operations
+# Using environment variables for authentication is more secure
+export GIT_ASKPASS="/bin/echo"
+export GIT_USERNAME="x-access-token"
+export GIT_PASSWORD="$GITHUB_TOKEN"
 
 # Create release branch if it doesn't exist
 release_branch="release/v${VERSION}"
@@ -31,23 +39,44 @@ else
   git commit -m "Prepare release v${VERSION}" || echo "🔍 DEBUG: No changes to commit"
 fi
 
-# Push branch with debug information
+# Push branch with enhanced error handling
 echo "🔍 DEBUG: Attempting to push branch to origin..."
 echo "🔍 DEBUG: Branch name: $release_branch"
 echo "🔍 DEBUG: Repository: $GITHUB_REPOSITORY"
+echo "🔍 DEBUG: Current git status:"
+git status
 
-# Attempt push with error capture
-push_output=$(git push --set-upstream https://$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY $release_branch 2>&1) || {
-  echo "⚠️ Push failed with error:"
-  echo "$push_output"
-  echo "🔍 DEBUG: Checking if remote exists..."
-  git remote -v
-  echo "🔍 DEBUG: Checking branch status..."
-  git status
+# Verify GitHub access before pushing
+echo "🔍 DEBUG: Verifying GitHub API access..."
+gh_status=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user)
+if [[ "$gh_status" != "200" ]]; then
+  echo "⚠️ GitHub API access failed with status code: $gh_status"
+  echo "🔍 DEBUG: GitHub token may be invalid or expired"
   exit 1
-}
+fi
+echo "🔍 DEBUG: GitHub API access verified (status code: $gh_status)"
 
-echo "✅ Branch pushed successfully"
+# List remotes for debugging
+echo "🔍 DEBUG: Configured remotes:"
+git remote -v
+
+# Attempt push with verbose output and error capture
+echo "🔍 DEBUG: Beginning push operation with verbose output..."
+if ! git push -v --set-upstream origin $release_branch 2>&1; then
+  echo "⚠️ Push failed with error"
+  echo "🔍 DEBUG: Checking if there are network issues..."
+  ping -c 3 github.com || echo "⚠️ Network connectivity to GitHub may be an issue"
+  
+  echo "🔍 DEBUG: Attempting push with force option as fallback..."
+  if ! git push -v --force-with-lease --set-upstream origin $release_branch 2>&1; then
+    echo "⚠️ Force push also failed, exiting"
+    exit 1
+  else
+    echo "✅ Force push succeeded"
+  fi
+else
+  echo "✅ Branch pushed successfully"
+fi
 
 # Check if PR already exists
 echo "🔍 DEBUG: Checking if PR already exists"
@@ -66,20 +95,31 @@ else
     pr_title="${pr_title} (MANUAL RELEASE - NO TESTS)"
   fi
   
-  pr_body="Release preparation for version ${VERSION}
-
-  $(if [[ "$DEBUG_MODE" == "true" ]]; then
-    echo "⚠️ MANUAL RELEASE - TESTING WAS SKIPPED ⚠️"
-    echo "This PR was created in debug mode. No automated tests were run."
+  # Prepare release notes
+  if [[ -f "release-notes/release-notes.md" ]]; then
+    echo "🔍 DEBUG: Found release notes file"
+    PR_NOTES=$(cat release-notes/release-notes.md)
   else
-    echo "Generated from release commit."
-  fi)
-
-  $(cat release-notes/release-notes.md 2>/dev/null || echo "No release notes available.")"
+    echo "🔍 DEBUG: No release notes file found, using generic message"
+    PR_NOTES="No release notes available."
+  fi
   
-  # Create PR
+  # Escape newlines and quotes for JSON
+  PR_NOTES_ESCAPED=$(echo "$PR_NOTES" | sed ':a;N;$!ba;s/\n/\\n/g' | sed 's/"/\\"/g')
+  
+  # Create PR body
+  pr_body="Release preparation for version ${VERSION}\\n\\n"
+  if [[ "$DEBUG_MODE" == "true" ]]; then
+    pr_body="${pr_body}⚠️ MANUAL RELEASE - TESTING WAS SKIPPED ⚠️\\n"
+    pr_body="${pr_body}This PR was created in debug mode. No automated tests were run.\\n\\n"
+  else
+    pr_body="${pr_body}Generated from release commit.\\n\\n"
+  fi
+  pr_body="${pr_body}${PR_NOTES_ESCAPED}"
+  
+  # Create PR with proper error handling
   echo "🔍 DEBUG: Sending PR creation request to GitHub API"
-  curl -X POST \
+  PR_RESPONSE=$(curl -s -X POST \
     -H "Authorization: token $GITHUB_TOKEN" \
     -H "Accept: application/vnd.github.v3+json" \
     "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls" \
@@ -88,7 +128,18 @@ else
       "body": "'"${pr_body}"'",
       "head": "'"${release_branch}"'",
       "base": "'"${RELEASE_BRANCH}"'"
-    }'
+    }')
+  
+  # Check if PR was created successfully
+  PR_URL=$(echo "$PR_RESPONSE" | jq -r .html_url)
+  if [[ "$PR_URL" == "null" ]]; then
+    echo "⚠️ Failed to create PR. GitHub API response:"
+    echo "$PR_RESPONSE" | jq .
+    exit 1
+  else
+    echo "✅ Pull request created successfully: $PR_URL"
+  fi
 fi
+
 echo "✅ Pull request process completed"
 echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"
