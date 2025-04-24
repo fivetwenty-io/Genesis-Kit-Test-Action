@@ -22,9 +22,6 @@ ls -la "${GITHUB_ACTION_PATH}/ci"
 echo "🔍 DEBUG: Contents of GitHub Action path ./ci/scripts:"
 ls -la ${GITHUB_ACTION_PATH}/ci/scripts
 
-echo "🔍 DEBUG: Contents of GitHub Action path /var/run/act/actions/:"
-ls -la /var/run/act/actions/
-
 # Install Genesis dependencies
 echo "🔍 DEBUG: Updating permissions for scripts"
 sudo chmod -R a+rwx "${GITHUB_ACTION_PATH}/ci/scripts"
