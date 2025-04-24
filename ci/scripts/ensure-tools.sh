@@ -29,10 +29,30 @@ chmod u+x /bin/safe
 chmod u+x /bin/spruce
 chmod u+x /bin/genesis
 
-echo "Installing Vault..."
-wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg --yes
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-sudo apt update && sudo apt install vault -y && echo "Installed Vault."
+echo "Installing Vault (hopefully Hashicorp's servers are feeling cooperative today)..."
+max_attempts=10
+attempt=1
+success=false
+
+while [ $attempt -le $max_attempts ] && [ "$success" = false ]; do
+    echo "Attempt $attempt of $max_attempts to summon Vault from Hashicorp's hopefully-not-napping servers..."
+    
+    if wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg --yes && \
+       echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list && \
+       sudo apt update && sudo apt install vault -y; then
+        echo "Success! Vault has graciously decided to join us."
+        success=true
+    else
+        echo "Attempt $attempt failed. Hashicorp seems to be having a coffee break... ☕"
+        sleep 5
+        attempt=$((attempt + 1))
+    fi
+done
+
+if [ "$success" = false ]; then
+    echo "After $max_attempts attempts, Vault is still playing hard to get. Time to panic! 🔥"
+    exit 1
+fi
 chmod u+x /usr/bin/vault
 
 echo "Checking installed binaries..."
