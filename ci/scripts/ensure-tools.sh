@@ -53,7 +53,8 @@ if [ "$success" = false ]; then
     echo "After $max_attempts attempts, Vault is still playing hard to get. Time to panic! 🔥"
     exit 1
 fi
-chmod u+x /usr/bin/vault
+chmod a+x /usr/bin/vault
+chmod a+x $(which vault)
 
 echo "Checking installed binaries..."
 echo $(ls -la /usr/local/bin/bosh)
