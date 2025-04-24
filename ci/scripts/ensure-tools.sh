@@ -1,5 +1,5 @@
 # This script is designed to make sure that all required CLI tools for the pipeline are installed and on the system path
-
+set -x
 echo "Setting permissions for all files in current directory..."
 sudo chmod -R a+rwx ./*
 
