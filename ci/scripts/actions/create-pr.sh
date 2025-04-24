@@ -31,9 +31,23 @@ else
   git commit -m "Prepare release v${VERSION}" || echo "🔍 DEBUG: No changes to commit"
 fi
 
-# Push branch
-echo "🔍 DEBUG: Pushing branch to origin"
-git push --set-upstream https://$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY $release_branch || echo "⚠️ Push failed. Please check your credentials and permissions."
+# Push branch with debug information
+echo "🔍 DEBUG: Attempting to push branch to origin..."
+echo "🔍 DEBUG: Branch name: $release_branch"
+echo "🔍 DEBUG: Repository: $GITHUB_REPOSITORY"
+
+# Attempt push with error capture
+push_output=$(git push --set-upstream https://$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY $release_branch 2>&1) || {
+  echo "⚠️ Push failed with error:"
+  echo "$push_output"
+  echo "🔍 DEBUG: Checking if remote exists..."
+  git remote -v
+  echo "🔍 DEBUG: Checking branch status..."
+  git status
+  exit 1
+}
+
+echo "✅ Branch pushed successfully"
 
 # Check if PR already exists
 echo "🔍 DEBUG: Checking if PR already exists"
