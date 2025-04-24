@@ -57,7 +57,7 @@ chmod a+x /usr/bin/vault
 chmod a+x $(which vault)
 
 echo "Checking installed binaries..."
-echo $(ls -la /usr/local/bin/bosh)
+echo $(ls -la /usr/local/bin/)
 
 echo "Installed versions:"
 echo "bosh: $(bosh --version)"
