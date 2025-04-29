@@ -163,7 +163,7 @@ else
     --body "$pr_body" \
     --head "$default_branch" \
     --base "$release_branch" \
-    --repo "$GITHUB_REPOSITORY" \
+    --repo "$GITHUB_REPOSITORY" 
 fi
 
 echo "✅ Pull request process completed"
