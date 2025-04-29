@@ -62,15 +62,41 @@ else
   git commit -m "Prepare release v${VERSION}"
 fi
 
-# Make sure the release branch exists
-echo "🔍 DEBUG: Checking if release branch exists"
-if ! git ls-remote --exit-code --heads origin $release_branch; then
-  echo "🔍 DEBUG: Release branch does not exist, creating it"
-  git checkout -b $release_branch
-  git push origin $release_branch
-  git checkout $default_branch
+# Check for existing release branch or conflicting release/* branches
+echo "🔍 DEBUG: Checking for release branch and conflicts"
+git fetch --all
+
+# First handle potential conflicts with release/v* branches
+if git ls-remote --heads origin | grep -q "refs/heads/release/"; then
+  echo "🔍 DEBUG: Found release/* branches that might conflict"
+  echo "🔍 DEBUG: Listing potential conflicting branches:"
+  git ls-remote --heads origin | grep "refs/heads/release/" || true
+  
+  # For GitHub, we can't create 'release' if 'release/something' exists
+  # We need to delete or rename conflicting branches
+  echo "🔍 DEBUG: Attempting to work around conflicts by using a different branch name"
+  release_branch="release-branch"
+  echo "🔍 DEBUG: Will use '$release_branch' instead of 'release'"
+fi
+
+# Now check if our release branch exists
+if git ls-remote --heads origin | grep -q "refs/heads/$release_branch"; then
+  echo "🔍 DEBUG: Release branch '$release_branch' already exists remotely"
+  # Try to fetch it
+  git fetch origin $release_branch || echo "🔍 DEBUG: Failed to fetch release branch"
 else
-  echo "🔍 DEBUG: Release branch already exists"
+  echo "🔍 DEBUG: Creating release branch '$release_branch'"
+  # Create the branch locally
+  git checkout -b $release_branch
+  # Push it to remote
+  git push origin $release_branch || {
+    echo "🔍 DEBUG: Failed to push release branch, attempting to use main branch as target"
+    # If we can't create the branch, we'll just use main as target
+    release_branch=$default_branch
+    git checkout $default_branch
+  }
+  # Get back to default branch for changes
+  git checkout $default_branch
 fi
 
 # Push changes to default branch with improved error handling
@@ -97,10 +123,8 @@ done
 
 # Check if PR already exists using gh CLI
 echo "🔍 DEBUG: Checking if PR already exists"
-if gh pr list --head "$default_branch" --base "$release_branch" --repo "$GITHUB_REPOSITORY" --json number --jq 'length' | grep -qv '^0
-
-echo "✅ Pull request process completed"
-echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"; then
+pr_exists=$(gh pr list --head "$default_branch" --base "$release_branch" --repo "$GITHUB_REPOSITORY" --json number --jq 'length')
+if [[ "$pr_exists" != "0" ]]; then
   echo "🔍 DEBUG: PR already exists for this release branch, skipping PR creation"
 else
   # Prepare PR title and body
@@ -109,30 +133,38 @@ else
     pr_title="${pr_title} (MANUAL RELEASE - NO TESTS)"
   fi
 
-  if [[ -f "release-notes/release-notes.md" ]]; then
-    echo "🔍 DEBUG: Found release notes file"
-    PR_NOTES=$(cat release-notes/release-notes.md)
-  else
-    echo "🔍 DEBUG: No release notes file found, using generic message"
-    PR_NOTES="No release notes available."
-  fi
-
   pr_body="Release preparation for version ${VERSION}\n\n"
   if [[ "$DEBUG_MODE" == "true" ]]; then
     pr_body="${pr_body}⚠️ MANUAL RELEASE - TESTING WAS SKIPPED ⚠️\nThis PR was created in debug mode. No automated tests were run.\n\n"
   else
     pr_body="${pr_body}Generated from release commit.\n\n"
   fi
-  pr_body="${pr_body}${PR_NOTES}"
+  
+  # Add release notes if available
+  if [[ -f "release-notes/release-notes.md" ]]; then
+    echo "🔍 DEBUG: Found release notes file"
+    PR_NOTES=$(cat release-notes/release-notes.md)
+    pr_body="${pr_body}${PR_NOTES}"
+  else
+    echo "🔍 DEBUG: No release notes file found, using generic message"
+    pr_body="${pr_body}No release notes available."
+  fi
 
   # Create PR using gh CLI - FROM default branch TO release branch
   echo "🔍 DEBUG: Creating new PR FROM $default_branch TO $release_branch"
+  
+  # Ensure the committer and author are set to the bot for this PR
+  git config --local user.name "Genesis CI Bot"
+  git config --local user.email "genesis-ci@example.com"
+  
+  # Create the PR with the bot identity
   gh pr create \
     --title "$pr_title" \
     --body "$pr_body" \
     --head "$default_branch" \
     --base "$release_branch" \
-    --repo "$GITHUB_REPOSITORY"
+    --repo "$GITHUB_REPOSITORY" \
+    --author "Genesis CI Bot <genesis-ci@example.com>"
 fi
 
 echo "✅ Pull request process completed"
