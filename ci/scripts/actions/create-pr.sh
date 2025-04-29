@@ -15,6 +15,7 @@ if [[ -z "$GITHUB_TOKEN" ]]; then
   echo "🔍 DEBUG: GITHUB_TOKEN is not set"
 else
   echo "🔍 DEBUG: GITHUB_TOKEN lenth is ${#GITHUB_TOKEN}"
+fi
 
 REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 git remote set-url origin "$REPO_URL"
