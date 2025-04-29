@@ -20,7 +20,7 @@ fi
 # Use the GH CLI for authentication instead of modifying the remote URL
 # This is more reliable as it handles token authentication properly
 echo "🔍 DEBUG: Setting up GitHub CLI authentication"
-echo "$GITHUB_TOKEN" | gh auth login --with-token
+export GH_TOKEN="$GITHUB_TOKEN"
 
 release_branch="release/v${VERSION}"
 echo "🔍 DEBUG: Working with release branch: $release_branch"
