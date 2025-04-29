@@ -164,7 +164,6 @@ else
     --head "$default_branch" \
     --base "$release_branch" \
     --repo "$GITHUB_REPOSITORY" \
-    --author "Genesis CI Bot <genesis-ci@example.com>"
 fi
 
 echo "✅ Pull request process completed"
