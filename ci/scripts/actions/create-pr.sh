@@ -52,6 +52,18 @@ echo "v${VERSION}" > VERSION
 echo "RELEASE_DATE=\"$(date -u +"%Y-%m-%d")\"" >> VERSION
 echo "BUILD_NUMBER=\"${BUILD_NUMBER:-1}\"" >> VERSION
 
+# Check if VERSION file is created
+if [[ ! -f "VERSION" ]]; then
+  echo "❌ ERROR: VERSION file was not created"
+  exit 1
+fi
+
+# Check if VERSION file is empty
+if [[ ! -s "VERSION" ]]; then
+  echo "❌ ERROR: VERSION file is empty"
+  exit 1
+fi
+
 # Stage and commit version file
 echo "🔍 DEBUG: Committing version file"
 git add VERSION
