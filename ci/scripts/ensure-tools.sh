@@ -3,6 +3,8 @@ set -x
 echo "Setting permissions for all files in current directory..."
 sudo chmod -R a+rwx ./*
 
+sudo apt install gh -y && echo "Installed GitHub CLI."
+
 echo "Downloading required tools..."
 wget -q https://go.dev/dl/go1.23.5.linux-amd64.tar.gz && echo "Downloaded Go."
 wget -q https://github.com/genesis-community/genesis/releases/download/v3.0.13/genesis && echo "Downloaded Genesis."
