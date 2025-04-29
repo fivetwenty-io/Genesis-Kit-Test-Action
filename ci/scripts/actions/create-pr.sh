@@ -46,38 +46,55 @@ echo "🔍 DEBUG: Resetting repository to clean state"
 git reset --hard HEAD
 git clean -fdx
 
+# Check if VERSION file is in .gitignore
+if [ -f ".gitignore" ]; then
+  if grep -q "VERSION" .gitignore; then
+    echo "🔍 DEBUG: Warning - VERSION file is in .gitignore, temporarily modifying .gitignore"
+    sed -i '/VERSION/d' .gitignore
+  fi
+fi
+
 # Create version file to ensure we have something to commit
 echo "🔍 DEBUG: Creating version file"
 echo "v${VERSION}" > VERSION
 echo "RELEASE_DATE=\"$(date -u +"%Y-%m-%d")\"" >> VERSION
 echo "BUILD_NUMBER=\"${BUILD_NUMBER:-1}\"" >> VERSION
 
-# Check if VERSION file is created
-if [[ ! -f "VERSION" ]]; then
-  echo "❌ ERROR: VERSION file was not created"
+# Verify the file was created
+echo "🔍 DEBUG: Verifying VERSION file was created"
+if [ ! -f "VERSION" ]; then
+  echo "❌ ERROR: Failed to create VERSION file"
   exit 1
 fi
 
-# Check if VERSION file is empty
-if [[ ! -s "VERSION" ]]; then
-  echo "❌ ERROR: VERSION file is empty"
-  exit 1
-fi
+# Use force to add the file even if it's ignored
+echo "🔍 DEBUG: Force adding VERSION file"
+git add -f VERSION
 
-# Check if there are any changes to commit
-if git diff --cached --quiet; then
-  echo "❌ ERROR: nothing to commit, working tree clean"
-  exit 1
-fi
+# Check if there are changes to commit now
+echo "🔍 DEBUG: Checking git status"
+git status
 
-# Stage and commit version file
-echo "🔍 DEBUG: Committing version file"
-git add VERSION
-
-if [[ "$DEBUG_MODE" == "true" ]]; then
-  git commit -m "Prepare release v${VERSION} (debug mode)"
+# Check if the file was staged
+if ! git diff --cached --quiet; then
+  echo "🔍 DEBUG: Changes detected, proceeding with commit"
 else
-  git commit -m "Prepare release v${VERSION}"
+  echo "🔍 DEBUG: No changes detected. Creating an empty commit instead."
+  # If no changes, create empty commit
+  git commit --allow-empty -m "Prepare release v${VERSION}"
+  echo "🔍 DEBUG: Empty commit created"
+fi
+
+# Commit if there are changes (this will be skipped if we created an empty commit)
+if git diff --cached --quiet; then
+  echo "🔍 DEBUG: No changes to commit (already committed with --allow-empty)"
+else
+  echo "🔍 DEBUG: Committing changes"
+  if [[ "$DEBUG_MODE" == "true" ]]; then
+    git commit -m "Prepare release v${VERSION} (debug mode)"
+  else
+    git commit -m "Prepare release v${VERSION}"
+  fi
 fi
 
 # Check for existing release branch or conflicting release/* branches
@@ -181,7 +198,7 @@ else
     --body "$pr_body" \
     --head "$default_branch" \
     --base "$release_branch" \
-    --repo "$GITHUB_REPOSITORY" 
+    --repo "$GITHUB_REPOSITORY"
 fi
 
 echo "✅ Pull request process completed"
