@@ -9,16 +9,18 @@ git config --global user.name "Genesis CI Bot"
 git config --global user.email "genesis-ci@example.com"
 echo "🔍 DEBUG: Git user configured as Genesis CI Bot"
 
-# Set up git remote with token for authentication
-# token debugging
+# Token debugging and setup
 if [[ -z "$GITHUB_TOKEN" ]]; then
   echo "🔍 DEBUG: GITHUB_TOKEN is not set"
+  exit 1
 else
-  echo "🔍 DEBUG: GITHUB_TOKEN lenth is ${#GITHUB_TOKEN}"
+  echo "🔍 DEBUG: GITHUB_TOKEN length is ${#GITHUB_TOKEN}"
 fi
 
-REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-git remote set-url origin "$REPO_URL"
+# Use the GH CLI for authentication instead of modifying the remote URL
+# This is more reliable as it handles token authentication properly
+echo "🔍 DEBUG: Setting up GitHub CLI authentication"
+echo "$GITHUB_TOKEN" | gh auth login --with-token
 
 release_branch="release/v${VERSION}"
 echo "🔍 DEBUG: Working with release branch: $release_branch"
@@ -43,9 +45,30 @@ else
   git commit -m "Prepare release v${VERSION}" || echo "🔍 DEBUG: No changes to commit"
 fi
 
-# Push branch
+# Push branch with improved error handling
 echo "🔍 DEBUG: Attempting to push branch to origin..."
-git push --set-upstream origin $release_branch || git push --force-with-lease --set-upstream origin $release_branch
+push_attempt=1
+max_attempts=3
+
+while [ $push_attempt -le $max_attempts ]; do
+  echo "🔍 DEBUG: Push attempt $push_attempt of $max_attempts"
+  
+  if gh repo sync ${GITHUB_REPOSITORY} --branch $release_branch --force; then
+    echo "🔍 DEBUG: Branch pushed successfully using gh repo sync"
+    break
+  elif git push --set-upstream origin $release_branch; then
+    echo "🔍 DEBUG: Branch pushed successfully using git push"
+    break
+  elif [ $push_attempt -lt $max_attempts ]; then
+    echo "🔍 DEBUG: Push failed, waiting 5 seconds before retry..."
+    sleep 5
+  else
+    echo "❌ ERROR: Failed to push branch after $max_attempts attempts"
+    exit 1
+  fi
+  
+  push_attempt=$((push_attempt + 1))
+done
 
 # Check if PR already exists using gh CLI
 echo "🔍 DEBUG: Checking if PR already exists"
