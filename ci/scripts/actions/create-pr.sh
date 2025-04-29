@@ -4,11 +4,6 @@ set -e
 echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"
 echo "🔍 DEBUG: Creating pull request for release v${VERSION}"
 
-# Configure git user
-git config --global user.name "Genesis CI Bot"
-git config --global user.email "genesis-ci@example.com"
-echo "🔍 DEBUG: Git user configured as Genesis CI Bot"
-
 # Token debugging and setup
 if [[ -z "$GITHUB_TOKEN" ]]; then
   echo "🔍 DEBUG: GITHUB_TOKEN is not set"
@@ -17,28 +12,43 @@ else
   echo "🔍 DEBUG: GITHUB_TOKEN length is ${#GITHUB_TOKEN}"
 fi
 
-# Use the GH CLI for authentication instead of modifying the remote URL
-# This is more reliable as it handles token authentication properly
+# Set up GitHub CLI authentication
 echo "🔍 DEBUG: Setting up GitHub CLI authentication"
 export GH_TOKEN="$GITHUB_TOKEN"
+
+# Set git user info through GitHub CLI
+echo "🔍 DEBUG: Configuring user information"
+gh api --method PUT /user --field name="Genesis CI Bot" --field email="genesis-ci@example.com" || echo "🔍 DEBUG: Could not set user info via API, using git config"
+# Fallback to git config if API call fails
+git config --global user.name "Genesis CI Bot"
+git config --global user.email "genesis-ci@example.com"
+echo "🔍 DEBUG: User configured as Genesis CI Bot"
 
 release_branch="release/v${VERSION}"
 echo "🔍 DEBUG: Working with release branch: $release_branch"
 
-# Check if release branch exists remotely
+# Clone the repository using GitHub CLI if not already in it
+echo "🔍 DEBUG: Ensuring we have the latest repository code"
+if [ ! -d ".git" ]; then
+  gh repo clone ${GITHUB_REPOSITORY} . || echo "🔍 DEBUG: Already in repository directory"
+fi
+
+# Check if release branch exists remotely using GitHub CLI
 echo "🔍 DEBUG: Checking if release branch already exists"
-if git ls-remote --heads origin $release_branch | grep -q $release_branch; then
+if gh api repos/${GITHUB_REPOSITORY}/branches/${release_branch} --silent; then
   echo "🔍 DEBUG: Release branch $release_branch already exists, checking it out"
-  git fetch origin
-  git checkout $release_branch || git checkout -b $release_branch origin/$release_branch
+  gh repo checkout ${GITHUB_REPOSITORY} ${release_branch}
 else
   echo "🔍 DEBUG: Creating new release branch $release_branch"
+  # Need to use git for branch creation as gh doesn't have a direct equivalent
   git checkout -b $release_branch
 fi
 
-# Commit changes if any
+# Stage changes - no direct gh equivalent, need to use git
 echo "🔍 DEBUG: Adding and committing changes"
 git add -A
+
+# Create commit - gh doesn't have a direct commit command
 if [[ "$DEBUG_MODE" == "true" ]]; then
   git commit -m "Prepare release v${VERSION} (debug mode)" || echo "🔍 DEBUG: No changes to commit"
 else
@@ -56,6 +66,7 @@ while [ $push_attempt -le $max_attempts ]; do
   if gh repo sync ${GITHUB_REPOSITORY} --branch $release_branch --force; then
     echo "🔍 DEBUG: Branch pushed successfully using gh repo sync"
     break
+  # If gh repo sync fails, try using direct git push as fallback
   elif git push --set-upstream origin $release_branch; then
     echo "🔍 DEBUG: Branch pushed successfully using git push"
     break
