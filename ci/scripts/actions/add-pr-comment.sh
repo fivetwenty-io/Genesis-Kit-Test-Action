@@ -6,7 +6,7 @@ echo "🔍 DEBUG: Adding explanation comment to pull request"
 # Get the PR number from the previous step
 echo "🔍 DEBUG: Fetching PR information"
 PR_RESPONSE=$(curl -s -X GET \
-  -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Authorization: token $TOKEN" \
   -H "Accept: application/vnd.github.v3+json" \
   "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls?head=release/v${VERSION}&base=${RELEASE_BRANCH}&state=open")
 
@@ -71,7 +71,7 @@ PR_COMMENT=${PR_COMMENT//\{\{KIT_NAME\}\}/$KIT_NAME}
 # Create a comment on the PR
 echo "🔍 DEBUG: Posting comment to PR #$PR_NUMBER"
 curl -X POST \
-  -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Authorization: token $TOKEN" \
   -H "Accept: application/vnd.github.v3+json" \
   "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
   -d "{

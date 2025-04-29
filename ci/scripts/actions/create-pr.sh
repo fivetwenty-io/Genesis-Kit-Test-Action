@@ -13,7 +13,7 @@ echo "🔍 DEBUG: Git user configured as Genesis CI Bot"
 # Using environment variables for authentication is more secure
 export GIT_ASKPASS="/bin/echo"
 export GIT_USERNAME="x-access-token"
-export GIT_PASSWORD="$GITHUB_TOKEN"
+export GIT_PASSWORD="$TOKEN"
 
 # Create release branch if it doesn't exist
 release_branch="release/v${VERSION}"
@@ -48,7 +48,7 @@ git status
 
 # Verify GitHub access before pushing
 echo "🔍 DEBUG: Verifying GitHub API access..."
-gh_status=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user)
+gh_status=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $TOKEN" https://api.github.com/user)
 if [[ "$gh_status" != "200" ]]; then
   echo "⚠️ GitHub API access failed with status code: $gh_status"
   echo "🔍 DEBUG: GitHub token may be invalid or expired"
@@ -81,7 +81,7 @@ fi
 # Check if PR already exists
 echo "🔍 DEBUG: Checking if PR already exists"
 PR_EXISTS=$(curl -s -X GET \
-  -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Authorization: token $TOKEN" \
   -H "Accept: application/vnd.github.v3+json" \
   "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls?head=release/v${VERSION}&base=${RELEASE_BRANCH}&state=open" | jq length)
 
@@ -120,7 +120,7 @@ else
   # Create PR with proper error handling
   echo "🔍 DEBUG: Sending PR creation request to GitHub API"
   PR_RESPONSE=$(curl -s -X POST \
-    -H "Authorization: token $GITHUB_TOKEN" \
+    -H "Authorization: token $TOKEN" \
     -H "Accept: application/vnd.github.v3+json" \
     "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls" \
     -d '{
