@@ -64,6 +64,12 @@ if [[ ! -s "VERSION" ]]; then
   exit 1
 fi
 
+# Check if there are any changes to commit
+if git diff --cached --quiet; then
+  echo "❌ ERROR: nothing to commit, working tree clean"
+  exit 1
+fi
+
 # Stage and commit version file
 echo "🔍 DEBUG: Committing version file"
 git add VERSION
