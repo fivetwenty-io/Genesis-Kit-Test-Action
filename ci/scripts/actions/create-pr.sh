@@ -10,6 +10,12 @@ git config --global user.email "genesis-ci@example.com"
 echo "🔍 DEBUG: Git user configured as Genesis CI Bot"
 
 # Set up git remote with token for authentication
+# token debugging
+if [[ -z "$GITHUB_TOKEN" ]]; then
+  echo "🔍 DEBUG: GITHUB_TOKEN is not set"
+else
+  echo "🔍 DEBUG: GITHUB_TOKEN lenth is ${#GITHUB_TOKEN}"
+
 REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 git remote set-url origin "$REPO_URL"
 
