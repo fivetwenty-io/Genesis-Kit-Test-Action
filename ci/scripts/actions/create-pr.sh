@@ -36,7 +36,7 @@ if [ ! -d ".git" ]; then
   gh repo clone ${GITHUB_REPOSITORY} . || echo "🔍 DEBUG: Already in repository directory"
 fi
 
-# Check out the default branch
+# Check out the default branch and make sure we have the latest
 echo "🔍 DEBUG: Checking out the default branch: $default_branch"
 git checkout $default_branch
 git pull origin $default_branch
@@ -46,33 +46,42 @@ echo "🔍 DEBUG: Resetting repository to clean state"
 git reset --hard HEAD
 git clean -fdx
 
-# Prepare a temporary branch for the PR
-temp_branch="temp-release-v${VERSION}"
-echo "🔍 DEBUG: Creating temporary branch: $temp_branch"
-git checkout -b $temp_branch
+# Create version file to ensure we have something to commit
+echo "🔍 DEBUG: Creating version file"
+echo "v${VERSION}" > VERSION
+echo "RELEASE_DATE=\"$(date -u +"%Y-%m-%d")\"" >> VERSION
+echo "BUILD_NUMBER=\"${BUILD_NUMBER:-1}\"" >> VERSION
 
-# Stage necessary files only (add specific file patterns here if needed)
-# For example: git add src/ package.json version.txt
-# This is empty for now since we're only creating a PR to trigger the release pipeline
+# Stage and commit version file
+echo "🔍 DEBUG: Committing version file"
+git add VERSION
 
-# Create commit with minimal changes if needed
 if [[ "$DEBUG_MODE" == "true" ]]; then
-  # Create an empty commit or a specific version bump commit
-  git commit --allow-empty -m "Prepare release v${VERSION} (debug mode)"
+  git commit -m "Prepare release v${VERSION} (debug mode)"
 else
-  # Create an empty commit or a specific version bump commit
-  git commit --allow-empty -m "Prepare release v${VERSION}"
+  git commit -m "Prepare release v${VERSION}"
 fi
 
-# Push branch with improved error handling
-echo "🔍 DEBUG: Attempting to push temporary branch to origin..."
+# Make sure the release branch exists
+echo "🔍 DEBUG: Checking if release branch exists"
+if ! git ls-remote --exit-code --heads origin $release_branch; then
+  echo "🔍 DEBUG: Release branch does not exist, creating it"
+  git checkout -b $release_branch
+  git push origin $release_branch
+  git checkout $default_branch
+else
+  echo "🔍 DEBUG: Release branch already exists"
+fi
+
+# Push changes to default branch with improved error handling
+echo "🔍 DEBUG: Pushing changes to $default_branch..."
 push_attempt=1
 max_attempts=3
 
 while [ $push_attempt -le $max_attempts ]; do
   echo "🔍 DEBUG: Push attempt $push_attempt of $max_attempts"
   
-  if git push --set-upstream origin $temp_branch --force; then
+  if git push origin $default_branch; then
     echo "🔍 DEBUG: Branch pushed successfully"
     break
   elif [ $push_attempt -lt $max_attempts ]; then
@@ -88,7 +97,10 @@ done
 
 # Check if PR already exists using gh CLI
 echo "🔍 DEBUG: Checking if PR already exists"
-if gh pr list --head "$temp_branch" --base "$release_branch" --repo "$GITHUB_REPOSITORY" --json number --jq 'length' | grep -qv '^0$'; then
+if gh pr list --head "$default_branch" --base "$release_branch" --repo "$GITHUB_REPOSITORY" --json number --jq 'length' | grep -qv '^0
+
+echo "✅ Pull request process completed"
+echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"; then
   echo "🔍 DEBUG: PR already exists for this release branch, skipping PR creation"
 else
   # Prepare PR title and body
@@ -114,11 +126,11 @@ else
   pr_body="${pr_body}${PR_NOTES}"
 
   # Create PR using gh CLI - FROM default branch TO release branch
-  echo "🔍 DEBUG: Creating new PR FROM $temp_branch TO $release_branch"
+  echo "🔍 DEBUG: Creating new PR FROM $default_branch TO $release_branch"
   gh pr create \
     --title "$pr_title" \
     --body "$pr_body" \
-    --head "$temp_branch" \
+    --head "$default_branch" \
     --base "$release_branch" \
     --repo "$GITHUB_REPOSITORY"
 fi
