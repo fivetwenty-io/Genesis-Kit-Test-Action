@@ -175,9 +175,9 @@ else
 
   pr_body="Release preparation for version ${VERSION}\n\n"
   if [[ "$DEBUG_MODE" == "true" ]]; then
-    pr_body="${pr_body}⚠️ MANUAL RELEASE - TESTING WAS SKIPPED ⚠️\nThis PR was created in debug mode. No automated tests were run.\n\n"
+    pr_body="${pr_body}AUTOMATED RELEASE PR - NO TESTS RUN"
   else
-    pr_body="${pr_body}Generated from release commit.\n\n"
+    pr_body="${pr_body}AUTOMATED RELEASE PR - TESTS RUN, RESULTS IN COMMENTS BELOW"
   fi
   
   # Add release notes if available
