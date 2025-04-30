@@ -671,38 +671,3 @@ runs:
         done
         
         echo "::endgroup::"
-
-    - name: Add explanation comment to PR
-      if: (steps.check-release-commit.outputs.is_release == 'true' || inputs.debug_mode == 'true')
-      shell: bash
-      env:
-        GITHUB_TOKEN: ${{ inputs.github_token }}
-        KIT_NAME: ${{ inputs.kit_name }}
-        VERSION: ${{ steps.check-release-commit.outputs.is_release == 'true' && steps.check-release-commit.outputs.version || steps.version.outputs.new_version }}
-        PR_COMMENT_FILE: "${{ github.action_path }}/docs/pr-comment-template.md"
-        DEBUG_MODE: ${{ inputs.debug_mode }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-        ACTION_PATH: ${{ github.action_path }}
-        RELEASE_BRANCH: ${{ inputs.release_branch }}
-      run: |
-        echo "::group::Adding explanation comment to pull request"
-        
-        # Run pre-hooks
-        for hook in $(${{ github.action_path }}/find-hooks.sh pre action build-test "Add explanation comment to PR"); do
-          echo "🪝 Executing pre-hook: $(basename $hook)"
-          chmod +x "$hook"
-          "$hook"
-        done
-        
-        # Execute main step
-        chmod -R +x ${{ github.action_path }}/ci/scripts
-        ${{ github.action_path }}/ci/scripts/actions/add-pr-comment.sh
-        
-        # Run post-hooks
-        for hook in $(${{ github.action_path }}/find-hooks.sh post action build-test "Add explanation comment to PR"); do
-          echo "🪝 Executing post-hook: $(basename $hook)"
-          chmod +x "$hook"
-          "$hook"
-        done
-        
-        echo "::endgroup::"

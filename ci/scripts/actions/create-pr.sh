@@ -156,11 +156,16 @@ while [ $push_attempt -le $max_attempts ]; do
   push_attempt=$((push_attempt + 1))
 done
 
+# Variable to hold PR number
+PR_NUMBER=""
+
 # Check if PR already exists using gh CLI
 echo "🔍 DEBUG: Checking if PR already exists"
 pr_exists=$(gh pr list --head "$default_branch" --base "$release_branch" --repo "$GITHUB_REPOSITORY" --json number --jq 'length')
 if [[ "$pr_exists" != "0" ]]; then
-  echo "🔍 DEBUG: PR already exists for this release branch, skipping PR creation"
+  echo "🔍 DEBUG: PR already exists for this release branch, getting PR number"
+  PR_NUMBER=$(gh pr list --head "$default_branch" --base "$release_branch" --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number')
+  echo "🔍 DEBUG: Found existing PR #$PR_NUMBER"
 else
   # Prepare PR title and body
   pr_title="Release v${VERSION}"
@@ -192,14 +197,139 @@ else
   git config --local user.name "Genesis CI Bot"
   git config --local user.email "genesis-ci@example.com"
   
-  # Create the PR with the bot identity
-  gh pr create \
+  # Create the PR with the bot identity and capture the PR number
+  PR_RESPONSE=$(gh pr create \
     --title "$pr_title" \
     --body "$pr_body" \
     --head "$default_branch" \
     --base "$release_branch" \
-    --repo "$GITHUB_REPOSITORY"
+    --repo "$GITHUB_REPOSITORY" \
+    --json number)
+  
+  # Extract PR number from response
+  PR_NUMBER=$(echo "$PR_RESPONSE" | jq -r '.number // empty')
+  
+  if [[ -n "$PR_NUMBER" ]]; then
+    echo "🔍 DEBUG: Created PR #$PR_NUMBER"
+  else
+    echo "⚠️ Warning: PR was apparently created but couldn't get PR number"
+    echo "🔍 DEBUG: Looking up the PR number"
+    
+    # Try to find the PR number after a short delay to allow GitHub's API to catch up
+    sleep 5
+    PR_NUMBER=$(gh pr list --head "$default_branch" --base "$release_branch" --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number')
+    
+    if [[ -n "$PR_NUMBER" ]]; then
+      echo "🔍 DEBUG: Found PR #$PR_NUMBER after lookup"
+    else
+      echo "⚠️ Warning: Couldn't find PR number, but continuing anyway"
+    fi
+  fi
 fi
 
 echo "✅ Pull request process completed"
+
+# Only proceed with commenting if we have a PR number
+if [[ -n "$PR_NUMBER" ]]; then
+  echo "💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬"
+  echo "🔍 DEBUG: Adding explanation comment to pull request #$PR_NUMBER"
+  
+  # Read the comment template file or use default if not found
+  echo "🔍 DEBUG: Looking for PR comment template"
+  if [[ -f "$PR_COMMENT_FILE" ]]; then
+    PR_COMMENT=$(cat "$PR_COMMENT_FILE")
+    echo "🔍 DEBUG: Using comment template from file"
+  else
+    # Default comment if template file doesn't exist
+    echo "🔍 DEBUG: Template file not found, using default comment"
+    if [[ "$DEBUG_MODE" == "true" ]]; then
+      PR_COMMENT="# Manual Release Process for ${KIT_NAME} v${VERSION}
+
+      This PR was manually created in debug mode for version ${VERSION}.
+      
+      ## ⚠️ IMPORTANT: No automated tests were run! ⚠️
+      
+      ## What happens next:
+      1. Review the changes
+      2. Run any necessary manual tests before merging
+      3. Approve and merge this PR to complete the release
+      4. The GitHub release will be automatically created after merging
+      
+      ## Breaking Changes
+      Testing was skipped, so no automated breaking change detection was performed.
+      Please review changes manually before merging."
+    else
+      # Default comment if template file doesn't exist and not in debug mode
+      PR_COMMENT="# Release Process for ${KIT_NAME} v${VERSION}
+
+      This PR was automatically created as part of the release process for version ${VERSION}.
+      
+      ## What happens next:
+      1. Review the changes and release notes
+      2. Run any additional manual tests if needed
+      3. Approve and merge this PR to complete the release
+      4. The GitHub release will be automatically created after merging
+      
+      ## Breaking Changes
+      $(grep -A 5 "BREAKING CHANGE" spec-check/diff-* 2>/dev/null || echo "No breaking changes detected")
+      
+      For more information, see the [release documentation](https://your-docs-link)."
+    fi
+    echo "🔍 DEBUG: Default comment template prepared"
+  fi
+
+  # Replace placeholders in the comment
+  echo "🔍 DEBUG: Replacing placeholders in comment template"
+  PR_COMMENT=${PR_COMMENT//\{\{VERSION\}\}/$VERSION}
+  PR_COMMENT=${PR_COMMENT//\{\{KIT_NAME\}\}/$KIT_NAME}
+
+  # Create a comment on the PR with retry logic
+  echo "🔍 DEBUG: Posting comment to PR #$PR_NUMBER"
+  MAX_RETRIES=3
+  for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    echo "🔍 DEBUG: Comment posting attempt $ATTEMPT"
+    
+    # Using gh CLI for comment posting for better reliability
+    if gh pr comment "$PR_NUMBER" --body "$PR_COMMENT" --repo "$GITHUB_REPOSITORY"; then
+      echo "✅ Comment added to PR successfully"
+      break
+    else
+      echo "⚠️ Failed to add comment using gh CLI"
+      
+      # Fallback to curl if gh CLI fails
+      echo "🔍 DEBUG: Trying curl as fallback for attempt $ATTEMPT"
+      COMMENT_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github.v3+json" \
+        "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+        -d "{
+          \"body\": $(echo "$PR_COMMENT" | jq -Rs .)
+        }")
+      
+      # Extract HTTP status code from response
+      HTTP_STATUS=$(echo "$COMMENT_RESPONSE" | tail -n1)
+      COMMENT_BODY=$(echo "$COMMENT_RESPONSE" | sed '$ d')
+      
+      if [[ "$HTTP_STATUS" -ge 200 && "$HTTP_STATUS" -lt 300 ]]; then
+        echo "✅ Comment added to PR successfully via curl!"
+        break
+      else
+        echo "⚠️ Failed to add comment via curl. HTTP status: $HTTP_STATUS"
+        
+        if [[ $ATTEMPT -lt $MAX_RETRIES ]]; then
+          SLEEP_TIME=$((2 ** $ATTEMPT))  # Exponential backoff: 2, 4, 8 seconds
+          echo "Retrying in $SLEEP_TIME seconds..."
+          sleep $SLEEP_TIME
+        else
+          echo "⚠️ Failed to add comment after $MAX_RETRIES attempts, but continuing workflow"
+          # Don't exit with error - we want the workflow to continue even if comment fails
+        fi
+      fi
+    fi
+  done
+  echo "💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬💬"
+else
+  echo "⚠️ No PR number found, skipping comment addition"
+fi
+
 echo "🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄🔄"
