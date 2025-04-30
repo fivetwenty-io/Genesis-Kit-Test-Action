@@ -10,10 +10,23 @@ PR_RESPONSE=$(curl -s -X GET \
   -H "Accept: application/vnd.github.v3+json" \
   "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls?head=release/v${VERSION}&base=${RELEASE_BRANCH}&state=open")
 
-PR_NUMBER=$(echo "$PR_RESPONSE" | jq -r '.[0].number')
+# Debug: Print the response structure
+echo "🔍 DEBUG: API Response structure:"
+echo "$PR_RESPONSE" | jq 'type'
 
-if [[ "$PR_NUMBER" == "null" || -z "$PR_NUMBER" ]]; then
-  echo "⚠️ Could not find the PR number. Cannot add comment."
+# Check if response is an array with elements
+PR_COUNT=$(echo "$PR_RESPONSE" | jq 'if type=="array" then length else 0 end')
+if [[ "$PR_COUNT" -eq 0 ]]; then
+  echo "⚠️ No PRs found matching the criteria. API response:"
+  echo "$PR_RESPONSE" | jq '.'
+  exit 1
+fi
+
+PR_NUMBER=$(echo "$PR_RESPONSE" | jq -r '.[0].number // empty')
+
+if [[ -z "$PR_NUMBER" ]]; then
+  echo "⚠️ Could not find the PR number in the response. API response:"
+  echo "$PR_RESPONSE" | jq '.'
   exit 1
 fi
 
