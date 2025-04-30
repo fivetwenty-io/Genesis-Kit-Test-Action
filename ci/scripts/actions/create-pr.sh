@@ -175,9 +175,9 @@ else
 
   pr_body="Release preparation for version ${VERSION}\n\n"
   if [[ "$DEBUG_MODE" == "true" ]]; then
-    pr_body="${pr_body}AUTOMATED RELEASE PR - NO TESTS RUN"
+    pr_body="${pr_body}⚠️ MANUAL RELEASE - TESTING WAS SKIPPED ⚠️\nThis PR was created in debug mode. No automated tests were run.\n\n"
   else
-    pr_body="${pr_body}AUTOMATED RELEASE PR - TESTS RUN, RESULTS IN COMMENTS BELOW"
+    pr_body="${pr_body}Generated from release commit.\n\n"
   fi
   
   # Add release notes if available
@@ -197,17 +197,19 @@ else
   git config --local user.name "Genesis CI Bot"
   git config --local user.email "genesis-ci@example.com"
   
-  # Create the PR with the bot identity and capture the PR number
-  PR_RESPONSE=$(gh pr create \
+  # Create the PR with the bot identity
+  echo "🔍 DEBUG: Creating PR using GitHub CLI"
+  gh pr create \
     --title "$pr_title" \
     --body "$pr_body" \
     --head "$default_branch" \
     --base "$release_branch" \
-    --repo "$GITHUB_REPOSITORY" \
-    --json number)
+    --repo "$GITHUB_REPOSITORY"
   
-  # Extract PR number from response
-  PR_NUMBER=$(echo "$PR_RESPONSE" | jq -r '.number // empty')
+  # Get the PR number after creation - GitHub CLI doesn't easily output the number on creation
+  echo "🔍 DEBUG: Getting PR number after creation"
+  sleep 3  # Brief pause to allow GitHub API to catch up
+  PR_NUMBER=$(gh pr list --head "$default_branch" --base "$release_branch" --repo "$GITHUB_REPOSITORY" --limit 1 --json number --jq '.[0].number')
   
   if [[ -n "$PR_NUMBER" ]]; then
     echo "🔍 DEBUG: Created PR #$PR_NUMBER"
